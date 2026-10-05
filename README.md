@@ -1,6 +1,6 @@
 # SIGMO — Frontend
 
-Primer avance funcional del Frontend de SIGMO, construido con React, Vite, TypeScript, Tailwind CSS, Lucide React y Recharts.
+sistema integrado de gestion monografica
 
 ## Requisitos
 - Node.js LTS
@@ -31,4 +31,5 @@ npm run build
 
 ## Nota
 
-Este primer avance utiliza datos simulados únicamente para representar las interfaces y flujos principales. La autenticación, API REST y PostgreSQL se integrarán posteriormente con el Backend de SIGMO.
+este proyecto tiene el proposito de ayudar a mejorar 
+la gestion de monografias en las universidades
