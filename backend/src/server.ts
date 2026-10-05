@@ -1,61 +1,205 @@
-import pool from './config/database'
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import path from 'path'
+import pool from './config/database'
+
+import authRoutes from './routes/authRoutes'
+import monografiaRoutes from './routes/monografiaRoutes'
+import avanceRoutes from './routes/avanceRoutes'
+import documentoRoutes from './routes/documentoRoutes'
+import usuarioRoutes from './routes/usuarioRoutes'
+import notificacionRoutes from './routes/notificacionRoutes'
+import coordinadorRoutes from './routes/coordinadorRoutes'
 dotenv.config()
 
 const app = express()
 
 const PORT = Number(process.env.PORT) || 3000
 
-console.log('🚀 Iniciando servidor SIGMO...')
-console.log('Puerto configurado:', PORT)
+// =====================================================
+// CORS
+// =====================================================
 
-// Middleware
 app.use(
   cors({
     origin: 'http://localhost:5173',
+    methods: [
+      'GET',
+      'POST',
+      'PUT',
+      'DELETE',
+      'OPTIONS',
+    ],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+    ],
   })
 )
 
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+// =====================================================
+// MIDDLEWARE
+// =====================================================
 
-// Ruta principal
+app.use(express.json())
+
+app.use(
+  express.urlencoded({
+    extended: true,
+  })
+)
+
+// =====================================================
+// ARCHIVOS ESTÁTICOS
+// =====================================================
+
+app.use(
+  '/uploads',
+  express.static(
+    path.join(
+      process.cwd(),
+      'uploads'
+    )
+  )
+)
+
+// =====================================================
+// RUTA PRINCIPAL
+// =====================================================
+
 app.get('/', (_req, res) => {
   res.json({
     success: true,
-    message: 'API de SIGMO funcionando correctamente',
+    message:
+      'API de SIGMO funcionando correctamente',
   })
 })
 
-// Ruta de prueba
-app.get('/api/health/database', async (_req, res) => {
-  try {
-    const result = await pool.query('SELECT NOW()')
+// =====================================================
+// HEALTH CHECK
+// =====================================================
 
+app.get(
+  '/api/health',
+  (_req, res) => {
     res.json({
       success: true,
-      message: 'Conexión con PostgreSQL funcionando correctamente',
-      databaseTime: result.rows[0].now,
-    })
-  } catch (error) {
-    console.error('Error de conexión con PostgreSQL:', error)
-
-    res.status(500).json({
-      success: false,
-      message: 'No se pudo conectar con PostgreSQL',
+      message:
+        'Servidor SIGMO activo',
+      timestamp:
+        new Date().toISOString(),
     })
   }
-})
+)
 
-// Iniciar servidor
-app.listen(3000, '127.0.0.1', () => {
-  console.log('')
-  console.log('======================================')
-  console.log('        SIGMO BACKEND')
-  console.log('======================================')
-  console.log(`Servidor: http://localhost:${PORT}`)
-  console.log('Estado:   ACTIVO')
-  console.log('======================================')
-})
+// =====================================================
+// HEALTH DATABASE
+// =====================================================
+
+app.get(
+  '/api/health/database',
+  async (_req, res) => {
+    try {
+      const result =
+        await pool.query(
+          'SELECT NOW()'
+        )
+
+      res.json({
+        success: true,
+        message:
+          'Conexión con PostgreSQL funcionando correctamente',
+        databaseTime:
+          result.rows[0].now,
+      })
+    } catch (error) {
+      console.error(
+        'Error de conexión con PostgreSQL:',
+        error
+      )
+
+      res.status(500).json({
+        success: false,
+        message:
+          'No se pudo conectar con PostgreSQL',
+      })
+    }
+  }
+)
+
+// =====================================================
+// RUTAS API
+// =====================================================
+
+app.use(
+  '/api/auth',
+  authRoutes
+)
+
+app.use(
+  '/api/monografias',
+  monografiaRoutes
+)
+
+app.use(
+  '/api/avances',
+  avanceRoutes
+)
+
+app.use(
+  '/api/documentos',
+  documentoRoutes
+)
+
+app.use(
+  '/api/usuarios',
+  usuarioRoutes
+)
+
+app.use(
+  '/api/notificaciones',
+  notificacionRoutes
+)
+app.use('/api/coordinador', coordinadorRoutes)
+
+// =====================================================
+// INICIAR SERVIDOR
+// =====================================================
+
+app.listen(
+  PORT,
+  () => {
+    console.log(
+      '=============================='
+    )
+
+    console.log(
+      'SIGMO BACKEND'
+    )
+
+    console.log(
+      `Servidor: http://localhost:${PORT}`
+    )
+
+    console.log(
+      'Health: http://localhost:3000/api/health'
+    )
+
+    console.log(
+      'Database: http://localhost:3000/api/health/database'
+    )
+
+    console.log(
+      'Usuarios: http://localhost:3000/api/usuarios'
+    )
+
+    console.log(
+      'Notificaciones: http://localhost:3000/api/notificaciones'
+    )
+
+    console.log(
+      '=============================='
+    )
+  }
+)
