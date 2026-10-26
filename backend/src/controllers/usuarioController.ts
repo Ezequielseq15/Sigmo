@@ -3,12 +3,12 @@ import path from 'path'
 import fs from 'fs'
 import pool from '../config/database'
 
-export const getPerfil = async (
-  req: Request,
-  res: Response
-) => {
+export const getPerfil = async (req: Request, res: Response) => {
   try {
     const { id_usuario } = req.params
+    if (Number(id_usuario) !== req.authUser?.id_usuario) {
+      return res.status(403).json({ success: false, message: 'No puedes consultar este perfil.' })
+    }
 
     const result = await pool.query(
       `
@@ -19,7 +19,9 @@ export const getPerfil = async (
         u.correo,
         u.rol,
         u.foto_perfil,
+        e.id_estudiante,
         e.carnet,
+        e.id_carrera,
         c.nombre AS carrera
       FROM usuarios u
       LEFT JOIN estudiantes e
@@ -43,10 +45,7 @@ export const getPerfil = async (
       usuario: result.rows[0],
     })
   } catch (error) {
-    console.error(
-      'Error al obtener perfil:',
-      error
-    )
+    console.error('Error al obtener perfil:', error instanceof Error ? error.name : 'UnknownError')
 
     return res.status(500).json({
       success: false,
@@ -55,22 +54,14 @@ export const getPerfil = async (
   }
 }
 
-export const uploadFotoPerfil = async (
-  req: Request,
-  res: Response
-) => {
+export const uploadFotoPerfil = async (req: Request, res: Response) => {
   try {
     const { id_usuario } = req.params
 
-    console.log(
-      'ID usuario:',
-      id_usuario
-    )
-
-    console.log(
-      'Archivo recibido:',
-      req.file
-    )
+    if (Number(id_usuario) !== req.authUser?.id_usuario) {
+      if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
+      return res.status(403).json({ success: false, message: 'No puedes modificar este perfil.' })
+    }
 
     if (!req.file) {
       return res.status(400).json({
@@ -80,97 +71,49 @@ export const uploadFotoPerfil = async (
     }
 
     const usuarioResult = await pool.query(
-      `
-      SELECT foto_perfil
-      FROM usuarios
-      WHERE id_usuario = $1
-      `,
+      'SELECT foto_perfil FROM usuarios WHERE id_usuario = $1',
       [id_usuario]
     )
 
     if (usuarioResult.rows.length === 0) {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
       return res.status(404).json({
         success: false,
         message: 'Usuario no encontrado',
       })
     }
 
-    const fotoAnterior =
-      usuarioResult.rows[0].foto_perfil
+    const fotoAnterior = usuarioResult.rows[0].foto_perfil
+    const rutaFoto = `/uploads/perfiles/${req.file.filename}`
 
-    const archivo = req.file
-
-    /*
-     * Ruta que se guarda en PostgreSQL.
-     */
-    const rutaFoto =
-      `/uploads/perfiles/${archivo.filename}`
-
-    /*
-     * Actualizar primero la base de datos.
-     */
     await pool.query(
-      `
-      UPDATE usuarios
-      SET foto_perfil = $1
-      WHERE id_usuario = $2
-      `,
-      [
-        rutaFoto,
-        id_usuario,
-      ]
+      'UPDATE usuarios SET foto_perfil = $1 WHERE id_usuario = $2',
+      [rutaFoto, id_usuario]
     )
 
-    /*
-     * Eliminar la fotografía anterior
-     * después de actualizar la nueva.
-     */
     if (fotoAnterior) {
       const rutaAnterior = path.join(
         process.cwd(),
-        fotoAnterior.replace(
-          '/uploads/',
-          'uploads/'
-        )
+        fotoAnterior.replace('/uploads/', 'uploads/')
       )
 
-      console.log(
-        'Foto anterior:',
-        rutaAnterior
-      )
-
-      if (
-        fs.existsSync(rutaAnterior)
-      ) {
+      if (fs.existsSync(rutaAnterior)) {
         fs.unlinkSync(rutaAnterior)
-
-        console.log(
-          'Foto anterior eliminada'
-        )
       }
     }
 
-    console.log(
-      'Nueva foto:',
-      rutaFoto
-    )
-
     return res.json({
       success: true,
-      message:
-        'Foto de perfil actualizada correctamente',
+      message: 'Foto de perfil actualizada correctamente',
       foto_perfil: rutaFoto,
     })
   } catch (error) {
-    console.error(
-      'Error al subir foto de perfil:',
-      error
-    )
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path)
+    console.error('Error al subir foto de perfil:', error instanceof Error ? error.name : 'UnknownError')
 
     return res.status(500).json({
       success: false,
-      message:
-        'No se pudo actualizar la foto de perfil',
+      message: 'No se pudo actualizar la foto de perfil',
     })
   }
 }

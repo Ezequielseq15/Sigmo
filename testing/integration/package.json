@@ -1,0 +1,13 @@
+{
+  "name": "sigmo-integration-tests",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test:readonly": "node --test ./readonly.test.mjs",
+    "test:integration": "node --test ./integration.test.mjs",
+    "arm:database": "node ./arm-isolated-db.mjs"
+  }
+}

@@ -5,6 +5,7 @@ import {
   getTutores,
   asignarTutor,
 } from '../controllers/monografiaController'
+import { requireRoles } from '../middleware/authMiddleware'
 
 const router = Router()
 
@@ -14,6 +15,7 @@ const router = Router()
 
 router.get(
   '/monografias',
+  requireRoles('COORDINADOR'),
   getMonografias
 )
 
@@ -23,6 +25,7 @@ router.get(
 
 router.get(
   '/tutores',
+  requireRoles('COORDINADOR'),
   getTutores
 )
 
@@ -32,6 +35,7 @@ router.get(
 
 router.put(
   '/monografias/:id_monografia/tutor',
+  requireRoles('COORDINADOR'),
   asignarTutor
 )
 

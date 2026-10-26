@@ -1,6 +1,22 @@
 import { Request, Response } from 'express'
 import path from 'path'
+import fs from 'fs'
 import pool from '../config/database'
+
+function eliminarArchivoSubido(ruta?: string) {
+  if (ruta && fs.existsSync(ruta)) fs.unlinkSync(ruta)
+}
+
+function obtenerRutaSegura(rutaRegistrada: string): string | null {
+  const raizUploads = path.resolve(process.cwd(), 'uploads')
+  const relativa = rutaRegistrada.replace(/^[/\\]?uploads[/\\]/i, '')
+  const absoluta = path.resolve(raizUploads, relativa)
+  const dentroDeUploads = path.relative(raizUploads, absoluta)
+  if (!dentroDeUploads || dentroDeUploads.startsWith('..') || path.isAbsolute(dentroDeUploads)) {
+    return null
+  }
+  return absoluta
+}
 
 export const getDocumentosByAvance = async (
   req: Request,
@@ -33,10 +49,7 @@ export const getDocumentosByAvance = async (
       documentos: result.rows,
     })
   } catch (error) {
-    console.error(
-      'Error al obtener documentos:',
-      error
-    )
+    console.error('Error al obtener documentos:', error instanceof Error ? error.name : 'UnknownError')
 
     return res.status(500).json({
       success: false,
@@ -52,8 +65,10 @@ export const uploadDocumento = async (
 ) => {
   try {
     const { id_avance } = req.body
+    const idAvance = Number(id_avance)
 
-    if (!id_avance) {
+    if (!Number.isInteger(idAvance) || idAvance <= 0) {
+      eliminarArchivoSubido(req.file?.path)
       return res.status(400).json({
         success: false,
         message:
@@ -97,7 +112,7 @@ export const uploadDocumento = async (
       RETURNING *
       `,
       [
-        id_avance,
+        idAvance,
         archivo.filename,
         archivo.originalname,
         rutaArchivo,
@@ -113,10 +128,8 @@ export const uploadDocumento = async (
       documento: result.rows[0],
     })
   } catch (error) {
-    console.error(
-      'Error al subir documento:',
-      error
-    )
+    eliminarArchivoSubido(req.file?.path)
+    console.error('Error al subir documento:', error instanceof Error ? error.name : 'UnknownError')
 
     return res.status(500).json({
       success: false,
@@ -162,27 +175,18 @@ export const downloadDocumento = async (
       })
     }
 
-    const rutaRelativa =
-      documento.ruta_archivo.replace(
-        '/uploads/',
-        ''
-      )
+    const rutaCompleta = obtenerRutaSegura(documento.ruta_archivo)
+    if (!rutaCompleta || !fs.existsSync(rutaCompleta)) {
+      return res.status(404).json({ success: false, message: 'Documento no encontrado.' })
+    }
 
-    const rutaCompleta = path.join(
-      process.cwd(),
-      'uploads',
-      rutaRelativa
-    )
-
+    res.setHeader('Cache-Control', 'private, no-store')
     return res.download(
       rutaCompleta,
       documento.nombre_original
     )
   } catch (error) {
-    console.error(
-      'Error al descargar documento:',
-      error
-    )
+    console.error('Error al descargar documento:', error instanceof Error ? error.name : 'UnknownError')
 
     return res.status(500).json({
       success: false,

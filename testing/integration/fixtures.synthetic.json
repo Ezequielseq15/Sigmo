@@ -1,0 +1,77 @@
+{
+  "purpose": "Declaracion de fixtures sinteticos; no es SQL ni se carga automaticamente.",
+  "runId": "<uuid-generado-por-corrida>",
+  "users": [
+    {
+      "key": "student_owner",
+      "role": "ESTUDIANTE",
+      "emailTemplate": "sigmo.itest+<runId>@std.uni.edu.ni",
+      "password": "<generar-aleatoria-en-la-corrida>"
+    },
+    {
+      "key": "student_other",
+      "role": "ESTUDIANTE",
+      "emailTemplate": "sigmo.other+<runId>@std.uni.edu.ni",
+      "password": "<generar-aleatoria-en-la-corrida>"
+    },
+    {
+      "key": "tutor_assigned",
+      "role": "TUTOR",
+      "emailTemplate": "sigmo.tutor+<runId>@dactic.uni.edu.ni",
+      "password": "<generar-aleatoria-en-la-corrida>"
+    },
+    {
+      "key": "tutor_unassigned",
+      "role": "TUTOR",
+      "emailTemplate": "sigmo.tutor2+<runId>@dactic.uni.edu.ni",
+      "password": "<generar-aleatoria-en-la-corrida>"
+    },
+    {
+      "key": "coordinator",
+      "role": "COORDINADOR",
+      "creation": "solo-seed-en-DB-desechable-con-hash-bcrypt; nunca-registro-publico",
+      "emailTemplate": "sigmo.coord+<runId>@dactic.uni.edu.ni",
+      "password": "<generar-aleatoria-en-la-corrida>"
+    }
+  ],
+  "referenceData": {
+    "career": { "key": "career_active", "name": "Carrera SIGMO de prueba", "active": true },
+    "cycle": { "key": "cycle_active", "name": "Ciclo SIGMO de prueba", "active": true },
+    "stages": ["Avance 1", "Avance 2", "Avance 3", "Documento final"]
+  },
+  "resources": {
+    "monograph_owner": {
+      "owner": "student_owner",
+      "tutor": "tutor_assigned",
+      "additionalStudents": [],
+      "approvedProtocol": true,
+      "purpose": "Crear avance y descargar documento propio"
+    },
+    "monograph_other": {
+      "owner": "student_other",
+      "tutor": "tutor_unassigned",
+      "approvedProtocol": false,
+      "purpose": "Protocolo pendiente y pruebas de acceso ajeno"
+    },
+    "protocol_pending": {
+      "monograph": "monograph_other",
+      "status": "PENDIENTE",
+      "purpose": "Aprobacion/rechazo y comprobacion de revisado_por"
+    },
+    "documents": [
+      {
+        "key": "private_pdf",
+        "parent": "advance_of_monograph_owner",
+        "content": "PDF minimo sintetico generado durante la prueba en uploads temporal"
+      }
+    ]
+  },
+  "constraints": [
+    "No usar nombres, correos, carnets, tokens, contrasenas ni archivos de personas reales.",
+    "No insertar estas fixtures en la base configurada por backend/.env.",
+    "Resolver IDs por key en la DB sigmo_itest, nunca asumir IDs secuenciales.",
+    "La creacion de estudiante/tutor se probara por /api/auth/register.",
+    "El coordinador se prepara solo en la DB aislada; el registro publico debe rechazarlo.",
+    "Descartar la instancia desechable completa al terminar; no limpiar la DB activa."
+  ]
+}

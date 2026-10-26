@@ -24,3 +24,9 @@ Thumbs.db
 
 # Archivos temporales
 *.tmp
+
+# Archivos privados subidos por usuarios de SIGMO
+backend/uploads/
+
+# Documentos y fotografías cargados por usuarios
+backend/uploads/

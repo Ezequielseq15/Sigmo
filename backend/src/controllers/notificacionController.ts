@@ -7,6 +7,9 @@ export const getNotificacionesByUsuario = async (
 ) => {
   try {
     const { id_usuario } = req.params
+    if (Number(id_usuario) !== req.authUser?.id_usuario) {
+      return res.status(403).json({ success: false, message: 'No puedes consultar estas notificaciones.' })
+    }
 
     const result = await pool.query(
       `
@@ -31,10 +34,7 @@ export const getNotificacionesByUsuario = async (
       notificaciones: result.rows,
     })
   } catch (error) {
-    console.error(
-      'Error al obtener notificaciones:',
-      error
-    )
+    console.error('Error al obtener notificaciones:', error instanceof Error ? error.name : 'UnknownError')
 
     return res.status(500).json({
       success: false,
@@ -50,6 +50,9 @@ export const getNotificacionesNoLeidas = async (
 ) => {
   try {
     const { id_usuario } = req.params
+    if (Number(id_usuario) !== req.authUser?.id_usuario) {
+      return res.status(403).json({ success: false, message: 'No puedes consultar estas notificaciones.' })
+    }
 
     const result = await pool.query(
       `
@@ -75,10 +78,7 @@ export const getNotificacionesNoLeidas = async (
       notificaciones: result.rows,
     })
   } catch (error) {
-    console.error(
-      'Error al obtener notificaciones no leídas:',
-      error
-    )
+    console.error('Error al obtener notificaciones no leídas:', error instanceof Error ? error.name : 'UnknownError')
 
     return res.status(500).json({
       success: false,
@@ -139,10 +139,7 @@ export const crearNotificacion = async (
         result.rows[0],
     })
   } catch (error) {
-    console.error(
-      'Error al crear notificación:',
-      error
-    )
+    console.error('Error al crear notificación:', error instanceof Error ? error.name : 'UnknownError')
 
     return res.status(500).json({
       success: false,
@@ -165,9 +162,10 @@ export const marcarNotificacionLeida = async (
       UPDATE notificaciones
       SET leida = TRUE
       WHERE id_notificacion = $1
+        AND id_usuario = $2
       RETURNING *
       `,
-      [id_notificacion]
+      [id_notificacion, req.authUser?.id_usuario]
     )
 
     if (result.rows.length === 0) {
@@ -186,10 +184,7 @@ export const marcarNotificacionLeida = async (
         result.rows[0],
     })
   } catch (error) {
-    console.error(
-      'Error al marcar notificación:',
-      error
-    )
+    console.error('Error al marcar notificación:', error instanceof Error ? error.name : 'UnknownError')
 
     return res.status(500).json({
       success: false,
@@ -205,6 +200,9 @@ export const marcarTodasLeidas = async (
 ) => {
   try {
     const { id_usuario } = req.params
+    if (Number(id_usuario) !== req.authUser?.id_usuario) {
+      return res.status(403).json({ success: false, message: 'No puedes modificar estas notificaciones.' })
+    }
 
     await pool.query(
       `
@@ -222,10 +220,7 @@ export const marcarTodasLeidas = async (
         'Todas las notificaciones fueron marcadas como leídas',
     })
   } catch (error) {
-    console.error(
-      'Error al marcar todas las notificaciones:',
-      error
-    )
+    console.error('Error al marcar todas las notificaciones:', error instanceof Error ? error.name : 'UnknownError')
 
     return res.status(500).json({
       success: false,

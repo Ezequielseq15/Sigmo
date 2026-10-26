@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Eye,
   EyeOff,
@@ -6,6 +6,8 @@ import {
   ArrowLeft,
   CheckCircle,
 } from 'lucide-react'
+import { API_URL } from '../config/api'
+import { dashboardRole, startSession } from '../auth/session'
 
 interface LoginProps {
   onSuccess: (
@@ -17,6 +19,11 @@ interface User {
   correo: string
   password: string
   role: 'estudiante' | 'tutor' | 'coordinador'
+}
+
+interface Carrera {
+  id_carrera: number
+  nombre: string
 }
 
 export default function Login({ onSuccess }: LoginProps) {
@@ -41,8 +48,14 @@ export default function Login({ onSuccess }: LoginProps) {
   const [registerApellido, setRegisterApellido] = useState('')
   const [registerCorreo, setRegisterCorreo] = useState('')
   const [registerRol, setRegisterRol] = useState<
-    'estudiante' | 'tutor'
-  >('estudiante')
+    'ESTUDIANTE' | 'TUTOR'
+  >('ESTUDIANTE')
+  const [registerCarnet, setRegisterCarnet] = useState('')
+  const [registerIdCarrera, setRegisterIdCarrera] = useState('')
+  const [registerCarreras, setRegisterCarreras] = useState<Carrera[]>([])
+  const [careersLoading, setCareersLoading] = useState(false)
+  const [registerDepartamento, setRegisterDepartamento] = useState('')
+  const [registerEspecialidad, setRegisterEspecialidad] = useState('')
   const [registerPassword, setRegisterPassword] = useState('')
   const [registerConfirmPassword, setRegisterConfirmPassword] =
     useState('')
@@ -56,6 +69,36 @@ export default function Login({ onSuccess }: LoginProps) {
   const [registerMessage, setRegisterMessage] = useState('')
   const [registerError, setRegisterError] = useState('')
   const [registerLoading, setRegisterLoading] = useState(false)
+
+  useEffect(() => {
+    if (!showRegister || registerRol !== 'ESTUDIANTE') return
+
+    let cancelled = false
+    setCareersLoading(true)
+    fetch(`${API_URL}/api/auth/carreras`)
+      .then(async response => {
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data.message || 'No se pudieron cargar las carreras.')
+        }
+        return data
+      })
+      .then(data => {
+        if (!cancelled) setRegisterCarreras(data.carreras || [])
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRegisterError('No se pudieron cargar las carreras. Intenta de nuevo más tarde.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCareersLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [showRegister, registerRol])
 
   // =========================================================
   // LOGIN
@@ -75,7 +118,7 @@ export default function Login({ onSuccess }: LoginProps) {
       setLoading(true)
 
       const response = await fetch(
-        'http://localhost:3000/api/auth/login',
+        `${API_URL}/api/auth/login`,
         {
           method: 'POST',
           headers: {
@@ -97,37 +140,8 @@ export default function Login({ onSuccess }: LoginProps) {
         return
       }
 
-      // Guardar token
-      localStorage.setItem(
-        'sigmo_token',
-        data.token
-      )
-
-      // Guardar información del usuario
-      localStorage.setItem(
-        'sigmo_user',
-        JSON.stringify(data.user)
-      )
-
-      // Redirigir según el rol
-      switch (data.user.rol) {
-        case 'ESTUDIANTE':
-          onSuccess('estudiante')
-          break
-
-        case 'TUTOR':
-          onSuccess('tutor')
-          break
-
-        case 'COORDINADOR':
-          onSuccess('coordinador')
-          break
-
-        default:
-          setError(
-            'El usuario tiene un rol no válido'
-          )
-      }
+      const user = startSession(data.token, data.user)
+      onSuccess(dashboardRole(user.rol))
     } catch (error) {
       console.error(
         'Error al iniciar sesión:',
@@ -135,7 +149,11 @@ export default function Login({ onSuccess }: LoginProps) {
       )
 
       setError(
-        'No se pudo conectar con el servidor. Verifica que el backend esté funcionando.'
+        error instanceof Error && error.message.startsWith('El servidor')
+          ? error.message
+          : error instanceof Error && error.message.startsWith('El navegador')
+            ? error.message
+            : 'No se pudo conectar con el servidor. Verifica que el backend esté funcionando.'
       )
     } finally {
       setLoading(false)
@@ -180,7 +198,11 @@ export default function Login({ onSuccess }: LoginProps) {
     setRegisterNombre('')
     setRegisterApellido('')
     setRegisterCorreo('')
-    setRegisterRol('estudiante')
+    setRegisterRol('ESTUDIANTE')
+    setRegisterCarnet('')
+    setRegisterIdCarrera('')
+    setRegisterDepartamento('')
+    setRegisterEspecialidad('')
     setRegisterPassword('')
     setRegisterConfirmPassword('')
     setRegisterMessage('')
@@ -203,6 +225,9 @@ export default function Login({ onSuccess }: LoginProps) {
     const apellido = registerApellido.trim()
     const correoRegistro =
       registerCorreo.trim().toLowerCase()
+    const carnet = registerCarnet.trim()
+    const departamento = registerDepartamento.trim()
+    const especialidad = registerEspecialidad.trim()
 
     // -----------------------------------------
     // Validaciones
@@ -243,10 +268,8 @@ export default function Login({ onSuccess }: LoginProps) {
     // -----------------------------------------
 
     if (
-      registerRol === 'estudiante' &&
-      !correoRegistro.endsWith(
-        '@std.uni.edu.ni'
-      )
+      registerRol === 'ESTUDIANTE' &&
+      correoRegistro.split('@').pop() !== 'std.uni.edu.ni'
     ) {
       setRegisterError(
         'Los estudiantes deben utilizar un correo @std.uni.edu.ni'
@@ -255,10 +278,8 @@ export default function Login({ onSuccess }: LoginProps) {
     }
 
     if (
-      registerRol === 'tutor' &&
-      !correoRegistro.endsWith(
-        '@dactic.uni.edu.ni'
-      )
+      registerRol === 'TUTOR' &&
+      correoRegistro.split('@').pop() !== 'dactic.uni.edu.ni'
     ) {
       setRegisterError(
         'Los tutores deben utilizar un correo @dactic.uni.edu.ni'
@@ -267,27 +288,52 @@ export default function Login({ onSuccess }: LoginProps) {
     }
 
     // -----------------------------------------
-    // Simulación de registro
+    if (registerRol === 'ESTUDIANTE' && (!carnet || !registerIdCarrera)) {
+      setRegisterError('El carnet y la carrera son obligatorios para estudiantes.')
+      return
+    }
+
+    if (carnet.length > 30 || departamento.length > 150 || especialidad.length > 200) {
+      setRegisterError('Uno o más campos exceden la longitud permitida.')
+      return
+    }
+
+    // Registro real y autenticación inmediata.
     // -----------------------------------------
 
     try {
       setRegisterLoading(true)
 
-      await new Promise(resolve =>
-        setTimeout(resolve, 1000)
-      )
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre,
+          apellido,
+          correo: correoRegistro,
+          password: registerPassword,
+          confirmPassword: registerConfirmPassword,
+          rol: registerRol,
+          ...(registerRol === 'ESTUDIANTE'
+            ? { carnet, id_carrera: Number(registerIdCarrera) }
+            : { departamento, especialidad }),
+        }),
+      })
+      const data = await response.json()
 
-      setRegisterMessage(
-        'Registro completado correctamente. Esta función es una demostración y no crea una cuenta real.'
-      )
+      if (!response.ok) {
+        setRegisterError(data.message || 'No se pudo completar el registro.')
+        return
+      }
 
-      // Limpiar campos
-      setRegisterNombre('')
-      setRegisterApellido('')
-      setRegisterCorreo('')
-      setRegisterRol('estudiante')
-      setRegisterPassword('')
-      setRegisterConfirmPassword('')
+      const user = startSession(data.token, data.user)
+      onSuccess(dashboardRole(user.rol))
+    } catch (error) {
+      setRegisterError(
+        error instanceof Error && (error.message.startsWith('El servidor') || error.message.startsWith('El navegador'))
+          ? error.message
+          : 'No se pudo conectar con el servidor. Intenta nuevamente.'
+      )
     } finally {
       setRegisterLoading(false)
     }
@@ -445,6 +491,8 @@ export default function Login({ onSuccess }: LoginProps) {
                           e.target.value
                         )
                       }
+                      maxLength={100}
+                      required
                       placeholder="Ej. Ezequiel"
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
@@ -467,6 +515,8 @@ export default function Login({ onSuccess }: LoginProps) {
                           e.target.value
                         )
                       }
+                      maxLength={100}
+                      required
                       placeholder="Ej. Sequeira"
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
@@ -489,8 +539,10 @@ export default function Login({ onSuccess }: LoginProps) {
                           e.target.value
                         )
                       }
+                      maxLength={150}
+                      required
                       placeholder={
-                        registerRol === 'estudiante'
+                        registerRol === 'ESTUDIANTE'
                           ? 'ejemplo@std.uni.edu.ni'
                           : 'ejemplo@dactic.uni.edu.ni'
                       }
@@ -510,26 +562,96 @@ export default function Login({ onSuccess }: LoginProps) {
                     <select
                       value={registerRol}
                       onChange={e =>
-                        setRegisterRol(
-                          e.target.value as
-                            | 'estudiante'
-                            | 'tutor'
-                        )
+                        setRegisterRol(e.target.value as 'ESTUDIANTE' | 'TUTOR')
                       }
                       className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
 
-                      <option value="estudiante">
+                      <option value="ESTUDIANTE">
                         Estudiante
                       </option>
 
-                      <option value="tutor">
+                      <option value="TUTOR">
                         Tutor
                       </option>
 
                     </select>
 
                   </div>
+
+                  {registerRol === 'ESTUDIANTE' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Carnet
+                        </label>
+                        <input
+                          type="text"
+                          value={registerCarnet}
+                          onChange={e => setRegisterCarnet(e.target.value)}
+                          maxLength={30}
+                          required
+                          placeholder="Tu carnet estudiantil"
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Carrera
+                        </label>
+                        <select
+                          value={registerIdCarrera}
+                          onChange={e => setRegisterIdCarrera(e.target.value)}
+                          required
+                          disabled={careersLoading || registerCarreras.length === 0}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50"
+                        >
+                          <option value="">
+                            {careersLoading ? 'Cargando carreras...' : 'Selecciona tu carrera'}
+                          </option>
+                          {registerCarreras.map(carrera => (
+                            <option key={carrera.id_carrera} value={carrera.id_carrera}>
+                              {carrera.nombre}
+                            </option>
+                          ))}
+                        </select>
+                        {!careersLoading && registerCarreras.length === 0 && (
+                          <p className="mt-1 text-xs text-amber-700">
+                            No hay carreras activas disponibles para el registro.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Departamento (opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={registerDepartamento}
+                          onChange={e => setRegisterDepartamento(e.target.value)}
+                          maxLength={150}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Especialidad (opcional)
+                        </label>
+                        <input
+                          type="text"
+                          value={registerEspecialidad}
+                          onChange={e => setRegisterEspecialidad(e.target.value)}
+                          maxLength={200}
+                          className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   {/* CONTRASEÑA */}
 
@@ -553,6 +675,8 @@ export default function Login({ onSuccess }: LoginProps) {
                             e.target.value
                           )
                         }
+                        minLength={6}
+                        required
                         placeholder="Mínimo 6 caracteres"
                         className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
@@ -601,6 +725,7 @@ export default function Login({ onSuccess }: LoginProps) {
                             e.target.value
                           )
                         }
+                        required
                         placeholder="Repita su contraseña"
                         className="w-full px-4 py-3 pr-12 rounded-xl border border-slate-200 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />

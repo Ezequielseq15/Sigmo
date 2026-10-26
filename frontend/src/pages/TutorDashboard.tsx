@@ -28,6 +28,7 @@ import {
 
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
+import { API_URL, apiFetch, downloadAuthenticatedFile } from '../config/api'
 
 interface Props {
   onLogout: () => void
@@ -113,9 +114,31 @@ interface Avance {
   descripcion: string
   estado: string
   fecha_entrega: string
+  enviado_por?: number | null
+  enviado_por_nombre?: string | null
+  enviado_por_apellido?: string | null
   comentario_tutor?: string | null
   fecha_revision?: string | null
+  revisado_por?: number | null
+  revisado_por_nombre?: string | null
+  revisado_por_apellido?: string | null
   documentos: Documento[]
+}
+
+interface Protocolo {
+  id_protocolo: number
+  numero_version: number
+  nombre_original?: string | null
+  estado: string
+  comentario_revision?: string | null
+  fecha_subida?: string | null
+  fecha_revision?: string | null
+  enviado_por?: number | null
+  enviado_por_nombre?: string | null
+  enviado_por_apellido?: string | null
+  revisado_por?: number | null
+  revisado_por_nombre?: string | null
+  revisado_por_apellido?: string | null
 }
 
 interface Notificacion {
@@ -127,17 +150,6 @@ interface Notificacion {
   leida: boolean
   fecha_creacion: string
 }
-
-const API_URL = 'http://localhost:3000'
-
-const etapas = [
-  { id: 1, nombre: 'Propuesta' },
-  { id: 2, nombre: 'Avance 1' },
-  { id: 3, nombre: 'Avance 2' },
-  { id: 4, nombre: 'Avance 3' },
-  { id: 5, nombre: 'Documento final' },
-  { id: 6, nombre: 'Defensa' },
-]
 
 const navItems = [
   {
@@ -174,18 +186,18 @@ const navItems = [
 */
 
 const descargarDocumento = (idDocumento: number) => {
-  window.open(
+  void downloadAuthenticatedFile(
     `${API_URL}/api/documentos/download/${idDocumento}`,
-    '_blank'
-  )
+    true
+  ).catch(error => {
+    alert(error instanceof Error ? error.message : 'No se pudo descargar el documento.')
+  })
 }
 
 const obtenerNombreEtapa = (idEtapa: number) => {
-  const etapa = etapas.find(
-    item => item.id === idEtapa
-  )
-
-  return etapa?.nombre || 'Avance'
+  return Number.isSafeInteger(idEtapa) && idEtapa > 0
+    ? `Etapa ${idEtapa}`
+    : 'Etapa sin identificar'
 }
 
 const formatearFecha = (
@@ -255,6 +267,9 @@ export default function TutorDashboard({
 
   const [avances, setAvances] =
     useState<Avance[]>([])
+
+  const [protocolos, setProtocolos] =
+    useState<Protocolo[]>([])
 
   const [
     avanceSeleccionado,
@@ -341,7 +356,7 @@ export default function TutorDashboard({
 
     const cargarPerfil = async () => {
       try {
-        const response = await fetch(
+        const response = await apiFetch(
           `${API_URL}/api/usuarios/${usuario.id}`
         )
 
@@ -421,7 +436,7 @@ export default function TutorDashboard({
           setLoading(true)
 
           const response =
-            await fetch(
+            await apiFetch(
               `${API_URL}/api/monografias`
             )
 
@@ -490,7 +505,7 @@ export default function TutorDashboard({
         )
 
         const response =
-          await fetch(
+          await apiFetch(
             `${API_URL}/api/notificaciones/usuario/${idUsuario}`
           )
 
@@ -540,10 +555,10 @@ export default function TutorDashboard({
       try {
         setLoadingAvances(true)
 
-        const response =
-          await fetch(
-            `${API_URL}/api/avances/monografia/${idMonografia}`
-          )
+
+const response = await apiFetch(
+  `${API_URL}/api/avances/monografia/${idMonografia}`
+)
 
         const data =
           await response.json()
@@ -570,7 +585,7 @@ export default function TutorDashboard({
 
                 try {
                   const responseDocumentos =
-                    await fetch(
+                    await apiFetch(
                       `${API_URL}/api/documentos/avance/${avance.id_avance}`
                     )
 
@@ -612,12 +627,24 @@ export default function TutorDashboard({
                     'PENDIENTE',
                   fecha_entrega:
                     avance.fecha_entrega,
+                  enviado_por:
+                    avance.enviado_por ?? null,
+                  enviado_por_nombre:
+                    avance.enviado_por_nombre || null,
+                  enviado_por_apellido:
+                    avance.enviado_por_apellido || null,
                   comentario_tutor:
                     avance.comentario_tutor ||
                     null,
                   fecha_revision:
                     avance.fecha_revision ||
                     null,
+                  revisado_por:
+                    avance.revisado_por ?? null,
+                  revisado_por_nombre:
+                    avance.revisado_por_nombre || null,
+                  revisado_por_apellido:
+                    avance.revisado_por_apellido || null,
                   documentos,
                 }
               }
@@ -643,6 +670,26 @@ export default function TutorDashboard({
       }
     }
 
+  const cargarProtocolos = async (idMonografia: number) => {
+    try {
+      const response = await apiFetch(
+        `${API_URL}/api/protocolos/monografia/${idMonografia}`
+      )
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'No se pudo consultar el historial del protocolo.')
+      }
+
+      setProtocolos(data.protocolos || [])
+      return data.protocolos || []
+    } catch (error) {
+      console.error('Error al cargar historial de protocolos:', error)
+      setProtocolos([])
+      return []
+    }
+  }
+
   /*
   |--------------------------------------------------------------------------
   | SELECCIONAR MONOGRAFÍA
@@ -660,6 +707,7 @@ export default function TutorDashboard({
       setAvanceSeleccionado(
         null
       )
+      setProtocolos([])
 
       setComentario('')
 
@@ -667,6 +715,8 @@ export default function TutorDashboard({
         await cargarAvances(
           monografia.id_monografia
         )
+
+      await cargarProtocolos(monografia.id_monografia)
 
       if (
         avancesCargados.length > 0
@@ -695,7 +745,7 @@ export default function TutorDashboard({
         setRevisando(true)
 
         const response =
-          await fetch(
+          await apiFetch(
             `${API_URL}/api/avances/${avanceSeleccionado.id_avance}/revisar`,
             {
               method: 'PUT',
@@ -709,6 +759,8 @@ export default function TutorDashboard({
                 comentario_tutor:
                   comentario.trim() ||
                   null,
+                revisado_por:
+                  usuario?.id,
               }),
             }
           )
@@ -806,7 +858,7 @@ export default function TutorDashboard({
         setRevisando(true)
 
         const response =
-          await fetch(
+          await apiFetch(
             `${API_URL}/api/avances/${avanceSeleccionado.id_avance}/revisar`,
             {
               method: 'PUT',
@@ -819,6 +871,8 @@ export default function TutorDashboard({
                   'RECHAZADO',
                 comentario_tutor:
                   comentarioLimpio,
+                revisado_por:
+                  usuario?.id,
               }),
             }
           )
@@ -949,7 +1003,7 @@ export default function TutorDashboard({
         )
 
         const response =
-          await fetch(
+          await apiFetch(
             `${API_URL}/api/usuarios/${perfil.id_usuario}/foto`,
             {
               method: 'PUT',
@@ -1045,7 +1099,7 @@ export default function TutorDashboard({
     ) => {
       try {
         const response =
-          await fetch(
+          await apiFetch(
             `${API_URL}/api/notificaciones/${idNotificacion}/leida`,
             {
               method: 'PUT',
@@ -1085,7 +1139,7 @@ export default function TutorDashboard({
 
       try {
         const response =
-          await fetch(
+          await apiFetch(
             `${API_URL}/api/notificaciones/usuario/${usuario.id}/marcar-todas-leidas`,
             {
               method: 'PUT',
@@ -1138,6 +1192,7 @@ export default function TutorDashboard({
         setAvanceSeleccionado(
           null
         )
+        setProtocolos([])
       }
     }
 
@@ -1508,6 +1563,7 @@ export default function TutorDashboard({
                 monografiaSeleccionada
               }
               avances={avances}
+              protocolos={protocolos}
               avanceSeleccionado={
                 avanceSeleccionado
               }
@@ -1916,6 +1972,7 @@ function MonografistasSection({
   setSearch,
   seleccionada,
   avances,
+  protocolos,
   avanceSeleccionado,
   loadingAvances,
   onSelect,
@@ -1936,6 +1993,7 @@ function MonografistasSection({
   seleccionada:
     Monografia | null
   avances: Avance[]
+  protocolos: Protocolo[]
   avanceSeleccionado:
     Avance | null
   loadingAvances: boolean
@@ -2237,6 +2295,64 @@ function MonografistasSection({
             </div>
           </div>
 
+          <div className="bg-white rounded-2xl border border-slate-100 p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="font-semibold text-slate-800">Historial del protocolo</h3>
+                <p className="text-xs text-slate-400 mt-1">Quién envió cada versión y quién la evaluó.</p>
+              </div>
+              <FileText size={20} className="text-emerald-500" />
+            </div>
+
+            {protocolos.length === 0 ? (
+              <p className="text-sm text-slate-500">No hay información de versiones de protocolo disponible.</p>
+            ) : (
+              <div className="space-y-3">
+                {protocolos.map(protocolo => (
+                  <div key={protocolo.id_protocolo} className="rounded-xl border border-slate-100 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-700">
+                        Versión {protocolo.numero_version}
+                        {protocolo.nombre_original ? ` · ${protocolo.nombre_original}` : ''}
+                      </p>
+                      <StatusBadge status={protocolo.estado} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                      <div className="rounded-lg bg-slate-50 p-3">
+                        <p className="text-xs font-semibold text-slate-500">Envío</p>
+                        <p className="text-sm text-slate-700 mt-1">
+                          {protocolo.enviado_por_nombre
+                            ? `${protocolo.enviado_por_nombre} ${protocolo.enviado_por_apellido || ''}`.trim()
+                            : 'Remitente no registrado'}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {formatearFechaHora(protocolo.fecha_subida)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 p-3">
+                        <p className="text-xs font-semibold text-slate-500">Evaluación</p>
+                        <p className="text-sm text-slate-700 mt-1">
+                          {protocolo.revisado_por_nombre
+                            ? `${protocolo.revisado_por_nombre} ${protocolo.revisado_por_apellido || ''}`.trim()
+                            : 'Pendiente de evaluación'}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {formatearFechaHora(protocolo.fecha_revision)}
+                        </p>
+                      </div>
+                    </div>
+                    {protocolo.comentario_revision && (
+                      <div className="mt-3 rounded-lg bg-amber-50 border border-amber-100 p-3">
+                        <p className="text-xs font-semibold text-amber-700">Observaciones</p>
+                        <p className="text-sm text-amber-800 mt-1">{protocolo.comentario_revision}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
             <div className="lg:col-span-1 bg-white rounded-2xl border border-slate-100 p-5">
@@ -2434,6 +2550,31 @@ function RevisionAvance({
                 )
               }
             </p>
+
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-xs font-semibold text-slate-500">Enviado por</p>
+                <p className="text-sm text-slate-700 mt-1">
+                  {avance.enviado_por_nombre
+                    ? `${avance.enviado_por_nombre} ${avance.enviado_por_apellido || ''}`.trim()
+                    : 'Remitente no registrado'}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {formatearFechaHora(avance.fecha_entrega)}
+                </p>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-3">
+                <p className="text-xs font-semibold text-slate-500">Evaluado por</p>
+                <p className="text-sm text-slate-700 mt-1">
+                  {avance.revisado_por_nombre
+                    ? `${avance.revisado_por_nombre} ${avance.revisado_por_apellido || ''}`.trim()
+                    : 'Pendiente de evaluación'}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {formatearFechaHora(avance.fecha_revision)}
+                </p>
+              </div>
+            </div>
 
           </div>
 

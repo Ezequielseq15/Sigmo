@@ -23,7 +23,10 @@ import {
   Camera,
   X,
   Check,
+  PlusCircle,
 } from 'lucide-react'
+import { API_URL, apiFetch, downloadAuthenticatedFile } from '../config/api'
+import DefensaPanel from '../components/DefensaPanel'
 
 interface StudentDashboardProps {
   onLogout: () => void
@@ -47,6 +50,8 @@ interface Perfil {
   foto_perfil: string | null
   carnet: string | null
   carrera: string | null
+  id_estudiante?: number | null
+  id_carrera?: number | null
 }
 
 interface Etapa {
@@ -101,6 +106,24 @@ interface Monografia {
   carrera: string
   ciclo: string
   integrantes: Integrante[]
+  estado_propuesta?: string | null
+  estado_protocolo?: string | null
+  comentario_propuesta?: string | null
+  fecha_revision_propuesta?: string | null
+}
+
+interface CicloAcademico {
+  id_ciclo: number
+  nombre: string
+  activo?: boolean
+}
+
+interface EstudianteDisponible {
+  id_estudiante: number
+  carnet: string
+  nombre: string
+  apellido: string
+  correo: string
 }
 
 interface Notificacion {
@@ -125,48 +148,6 @@ type Section =
   | 'avances'
   | 'calendario'
   | 'perfil'
-
-const API_URL = 'http://localhost:3000'
-
-/*
-|--------------------------------------------------------------------------
-| ETAPAS
-|--------------------------------------------------------------------------
-| Según la estructura actual de la base de datos:
-|
-| 1 = Propuesta
-| 2 = Avance 1
-| 3 = Avance 2
-| 4 = Avance 3
-| 5 = Documento final
-| 6 = Defensa
-|
-| Defensa NO se puede registrar como archivo desde este formulario.
-|--------------------------------------------------------------------------
-*/
-
-const ETAPAS_CARGABLES: Etapa[] = [
-  {
-    id: 1,
-    nombre: 'Propuesta',
-  },
-  {
-    id: 2,
-    nombre: 'Avance 1',
-  },
-  {
-    id: 3,
-    nombre: 'Avance 2',
-  },
-  {
-    id: 4,
-    nombre: 'Avance 3',
-  },
-  {
-    id: 5,
-    nombre: 'Documento final',
-  },
-]
 
 export default function StudentDashboard({
   onLogout,
@@ -207,6 +188,46 @@ export default function StudentDashboard({
   const [submitting, setSubmitting] =
     useState(false)
 
+  const [ciclosPropuesta, setCiclosPropuesta] =
+    useState<CicloAcademico[]>([])
+
+  const [estudiantesDisponibles, setEstudiantesDisponibles] =
+    useState<EstudianteDisponible[]>([])
+
+  const [cargandoCatalogos, setCargandoCatalogos] =
+    useState(false)
+
+  const [enviandoPropuesta, setEnviandoPropuesta] =
+    useState(false)
+
+  const [mensajePropuesta, setMensajePropuesta] =
+    useState('')
+
+  const [errorPropuesta, setErrorPropuesta] =
+    useState('')
+
+  const [archivoProtocoloCorregido, setArchivoProtocoloCorregido] =
+    useState<File | null>(null)
+
+  const [enviandoProtocoloCorregido, setEnviandoProtocoloCorregido] =
+    useState(false)
+
+  const [mensajeProtocoloCorregido, setMensajeProtocoloCorregido] =
+    useState('')
+
+  const [errorProtocoloCorregido, setErrorProtocoloCorregido] =
+    useState('')
+
+  const [propuestaForm, setPropuestaForm] = useState({
+    titulo: '',
+    descripcion: '',
+    id_ciclo: '',
+    integrantes: [] as number[],
+    archivo: null as File | null,
+  })
+
+  const [busquedaCarnet, setBusquedaCarnet] = useState('')
+
   const [loadingPerfil, setLoadingPerfil] =
     useState(true)
 
@@ -226,11 +247,24 @@ export default function StudentDashboard({
       archivo: null,
     })
 
+  const [etapasCargables, setEtapasCargables] = useState<Etapa[]>([])
+  const [loadingEtapas, setLoadingEtapas] = useState(true)
+  const [errorEtapas, setErrorEtapas] = useState('')
+
   /*
   |--------------------------------------------------------------------------
   | CARGAR USUARIO
   |--------------------------------------------------------------------------
   */
+
+
+  const protocoloAceptado = [
+    monografia?.estado_propuesta,
+    monografia?.estado_protocolo,
+  ].some((estado) =>
+    String(estado || '').trim().toUpperCase() === 'APROBADO' ||
+    String(estado || '').trim().toUpperCase() === 'ACEPTADO'
+  )
 
   useEffect(() => {
     const usuarioGuardado =
@@ -266,6 +300,35 @@ export default function StudentDashboard({
     }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    const cargarEtapas = async () => {
+      setLoadingEtapas(true)
+      setErrorEtapas('')
+      try {
+        const response = await apiFetch(`${API_URL}/api/avances/etapas`)
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.message || 'No se pudieron cargar las etapas.')
+        const etapas = Array.isArray(data.etapas)
+          ? data.etapas.map((item: { id_etapa: number; nombre: string }) => ({
+              id: Number(item.id_etapa),
+              nombre: String(item.nombre),
+            })).filter((item: Etapa) => Number.isInteger(item.id) && item.id > 0 && item.nombre)
+          : []
+        if (!cancelled) setEtapasCargables(etapas)
+      } catch (error) {
+        if (!cancelled) {
+          setErrorEtapas(error instanceof Error ? error.message : 'No se pudieron cargar las etapas.')
+          setEtapasCargables([])
+        }
+      } finally {
+        if (!cancelled) setLoadingEtapas(false)
+      }
+    }
+    void cargarEtapas()
+    return () => { cancelled = true }
+  }, [])
+
   /*
   |--------------------------------------------------------------------------
   | CARGAR PERFIL
@@ -282,7 +345,7 @@ export default function StudentDashboard({
         setLoadingPerfil(true)
 
         const response =
-          await fetch(
+          await apiFetch(
             `${API_URL}/api/usuarios/${usuario.id}`
           )
 
@@ -340,6 +403,171 @@ export default function StudentDashboard({
     cargarPerfil()
   }, [usuario?.id])
 
+  useEffect(() => {
+    if (section !== 'monografia' || monografia || !usuario?.id) return
+
+    const cargarCatalogos = async () => {
+      try {
+        setCargandoCatalogos(true)
+        const response = await apiFetch(`${API_URL}/api/monografias/catalogos/propuesta`)
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.message || 'No se pudieron cargar los datos del formulario')
+        setCiclosPropuesta(Array.isArray(data.ciclos) ? data.ciclos : [])
+        setEstudiantesDisponibles(
+          (Array.isArray(data.estudiantes) ? data.estudiantes : []).filter(
+            (estudiante: EstudianteDisponible) => estudiante.correo !== usuario.correo
+          )
+        )
+      } catch (error) {
+        setErrorPropuesta(error instanceof Error ? error.message : 'No se pudieron cargar los datos del formulario')
+      } finally {
+        setCargandoCatalogos(false)
+      }
+    }
+
+    cargarCatalogos()
+  }, [section, monografia, usuario?.id, usuario?.correo])
+
+  const enviarPropuesta = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setMensajePropuesta('')
+    setErrorPropuesta('')
+
+    if (!perfil?.id_estudiante || !perfil?.id_carrera) {
+      setErrorPropuesta('Tu perfil no tiene una carrera o registro de estudiante válido. Contacta al administrador.')
+      return
+    }
+    if (!propuestaForm.titulo.trim() || !propuestaForm.descripcion.trim() || !propuestaForm.id_ciclo || !propuestaForm.archivo) {
+      setErrorPropuesta('Completa todos los campos y adjunta el protocolo en PDF.')
+      return
+    }
+    if (propuestaForm.archivo.type !== 'application/pdf' && !propuestaForm.archivo.name.toLowerCase().endsWith('.pdf')) {
+      setErrorPropuesta('El archivo del protocolo debe ser PDF.')
+      return
+    }
+    if (propuestaForm.archivo.size > 10 * 1024 * 1024) {
+      setErrorPropuesta('El PDF no puede superar los 10 MB.')
+      return
+    }
+
+    const integrantes = propuestaForm.integrantes.filter((id) => id !== perfil.id_estudiante)
+    if (integrantes.length > 1) {
+      setErrorPropuesta('Selecciona como máximo dos integrantes adicionales.')
+      return
+    }
+
+    const datos = new FormData()
+    datos.append('titulo', propuestaForm.titulo.trim())
+    datos.append('descripcion', propuestaForm.descripcion.trim())
+    datos.append('id_estudiante', String(perfil.id_estudiante))
+    datos.append('enviado_por', String(perfil.id_usuario))
+    datos.append('id_carrera', String(perfil.id_carrera))
+    datos.append('id_ciclo', propuestaForm.id_ciclo)
+    datos.append('integrantes', JSON.stringify(integrantes))
+    datos.append('archivo', propuestaForm.archivo)
+
+    try {
+      setEnviandoPropuesta(true)
+      const response = await apiFetch(`${API_URL}/api/protocolos`, {
+        method: 'POST',
+        body: datos,
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        if (response.status === 409 || data.code === 'MONOGRAFIA_DUPLICADA') {
+          throw new Error(data.message || 'Ya existe una monografía con ese título. Usa un título diferente.')
+        }
+        throw new Error(data.message || 'No se pudo registrar la propuesta.')
+      }
+      setMensajePropuesta(data.message || 'La propuesta fue enviada correctamente para revisión.')
+      setPropuestaForm({ titulo: '', descripcion: '', id_ciclo: '', integrantes: [], archivo: null })
+      setBusquedaCarnet('')
+      const selector = document.getElementById('archivo-propuesta') as HTMLInputElement | null
+      if (selector) selector.value = ''
+      setLoadingMonografia(true)
+      const listaResponse = await apiFetch(`${API_URL}/api/monografias`)
+      const listaData = await listaResponse.json()
+      const lista: Monografia[] = listaData.monografias || []
+      const encontrada = lista.find((item) => item.estudiante_correo === usuario?.correo || item.integrantes?.some((integrante) => integrante.correo === usuario?.correo))
+      if (encontrada) {
+        setMonografia({ ...encontrada, integrantes: Array.isArray(encontrada.integrantes) ? encontrada.integrantes : [] })
+      }
+    } catch (error) {
+      setErrorPropuesta(error instanceof Error ? error.message : 'Ocurrió un error al enviar la propuesta.')
+    } finally {
+      setEnviandoPropuesta(false)
+      setLoadingMonografia(false)
+    }
+  }
+
+  const reenviarProtocolo = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setMensajeProtocoloCorregido('')
+    setErrorProtocoloCorregido('')
+
+    if (!monografia?.id_monografia) {
+      setErrorProtocoloCorregido('No se encontró la monografía que necesita corrección.')
+      return
+    }
+
+    if (!archivoProtocoloCorregido) {
+      setErrorProtocoloCorregido('Selecciona el protocolo corregido en PDF.')
+      return
+    }
+
+    if (archivoProtocoloCorregido.type !== 'application/pdf' && !archivoProtocoloCorregido.name.toLowerCase().endsWith('.pdf')) {
+      setErrorProtocoloCorregido('El documento debe estar en formato PDF.')
+      return
+    }
+
+    if (archivoProtocoloCorregido.size > 10 * 1024 * 1024) {
+      setErrorProtocoloCorregido('El PDF no puede superar los 10 MB.')
+      return
+    }
+
+    const idUsuarioEnvio = perfil?.id_usuario || usuario?.id
+    if (!idUsuarioEnvio) {
+      setErrorProtocoloCorregido('No se pudo identificar al estudiante que envía el documento. Cierra sesión e inicia nuevamente.')
+      return
+    }
+
+    const datos = new FormData()
+    datos.append('archivo', archivoProtocoloCorregido)
+    datos.append('enviado_por', String(idUsuarioEnvio))
+
+    try {
+      setEnviandoProtocoloCorregido(true)
+      const response = await apiFetch(
+        `${API_URL}/api/protocolos/monografia/${monografia.id_monografia}/representar`,
+        { method: 'POST', body: datos }
+      )
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data.message || 'No se pudo volver a enviar el protocolo corregido.')
+      }
+
+      setMensajeProtocoloCorregido(data.message || 'El protocolo corregido fue enviado para revisión.')
+      setArchivoProtocoloCorregido(null)
+      const selector = document.getElementById('archivo-protocolo-corregido') as HTMLInputElement | null
+      if (selector) selector.value = ''
+
+      const listaResponse = await apiFetch(`${API_URL}/api/monografias`)
+      const listaData = await listaResponse.json().catch(() => ({}))
+      const lista: Monografia[] = Array.isArray(listaData.monografias) ? listaData.monografias : []
+      const encontrada = lista.find((item) =>
+        item.estudiante_correo === usuario?.correo ||
+        item.integrantes?.some((integrante) => integrante.correo === usuario?.correo)
+      )
+      if (encontrada) {
+        setMonografia({ ...encontrada, integrantes: Array.isArray(encontrada.integrantes) ? encontrada.integrantes : [] })
+      }
+    } catch (error) {
+      setErrorProtocoloCorregido(error instanceof Error ? error.message : 'Ocurrió un error al enviar el protocolo corregido.')
+    } finally {
+      setEnviandoProtocoloCorregido(false)
+    }
+  }
+
   /*
   |--------------------------------------------------------------------------
   | CARGAR MONOGRAFÍA
@@ -356,7 +584,7 @@ export default function StudentDashboard({
         setLoadingMonografia(true)
 
         const response =
-          await fetch(
+          await apiFetch(
             `${API_URL}/api/monografias`
           )
 
@@ -432,7 +660,7 @@ export default function StudentDashboard({
   ) => {
     try {
       const response =
-        await fetch(
+        await apiFetch(
           `${API_URL}/api/avances/monografia/${idMonografia}`
         )
 
@@ -458,7 +686,7 @@ export default function StudentDashboard({
 
               try {
                 const responseDocumentos =
-                  await fetch(
+                  await apiFetch(
                     `${API_URL}/api/documentos/avance/${avance.id_avance}`
                   )
 
@@ -529,7 +757,7 @@ export default function StudentDashboard({
   ) => {
     try {
       const response =
-        await fetch(
+        await apiFetch(
           `${API_URL}/api/notificaciones/usuario/${idUsuario}`
         )
 
@@ -634,7 +862,7 @@ export default function StudentDashboard({
       )
 
       const response =
-        await fetch(
+        await apiFetch(
           `${API_URL}/api/usuarios/${perfil.id_usuario}/foto`,
           {
             method: 'PUT',
@@ -717,6 +945,11 @@ export default function StudentDashboard({
       return
     }
 
+    if (!protocoloAceptado) {
+      alert('No puedes registrar avances hasta que el coordinador acepte tu protocolo.')
+      return
+    }
+
     if (!formData.id_etapa) {
       alert(
         'Selecciona una etapa.'
@@ -761,7 +994,7 @@ export default function StudentDashboard({
     }
 
     const etapaSeleccionada =
-      ETAPAS_CARGABLES.find(
+      etapasCargables.find(
         (etapa) =>
           etapa.id ===
           Number(
@@ -779,87 +1012,20 @@ export default function StudentDashboard({
     try {
       setSubmitting(true)
 
-      /*
-      |--------------------------------------------------------------------------
-      | PASO 1: CREAR AVANCE
-      |--------------------------------------------------------------------------
-      */
+      const datosAvance = new FormData()
+      datosAvance.append('id_monografia', String(monografia.id_monografia))
+      datosAvance.append('id_etapa', String(etapaSeleccionada.id))
+      datosAvance.append('descripcion', formData.descripcion.trim())
+      datosAvance.append('archivo', formData.archivo)
 
-      const responseAvance =
-        await fetch(
-          `${API_URL}/api/avances`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-            body: JSON.stringify({
-              id_monografia:
-                monografia.id_monografia,
-              id_etapa:
-                etapaSeleccionada.id,
-              descripcion:
-                formData.descripcion.trim(),
-            }),
-          }
-        )
+      const response = await apiFetch(`${API_URL}/api/avances`, {
+        method: 'POST',
+        body: datosAvance,
+      })
+      const data = await response.json()
 
-      const dataAvance =
-        await responseAvance.json()
-
-      if (!responseAvance.ok) {
-        throw new Error(
-          dataAvance.message ||
-            'No se pudo registrar el avance.'
-        )
-      }
-
-      const idAvance =
-        dataAvance?.avance?.id_avance
-
-      if (!idAvance) {
-        throw new Error(
-          'El backend no devolvió el ID del avance creado.'
-        )
-      }
-
-      /*
-      |--------------------------------------------------------------------------
-      | PASO 2: SUBIR PDF
-      |--------------------------------------------------------------------------
-      */
-
-      const datosArchivo =
-        new FormData()
-
-      datosArchivo.append(
-        'id_avance',
-        String(idAvance)
-      )
-
-      datosArchivo.append(
-        'archivo',
-        formData.archivo
-      )
-
-      const responseDocumento =
-        await fetch(
-          `${API_URL}/api/documentos/upload`,
-          {
-            method: 'POST',
-            body: datosArchivo,
-          }
-        )
-
-      const dataDocumento =
-        await responseDocumento.json()
-
-      if (!responseDocumento.ok) {
-        throw new Error(
-          dataDocumento.message ||
-            'El avance fue creado, pero el documento no pudo subirse.'
-        )
+      if (!response.ok) {
+        throw new Error(data.message || 'No se pudo registrar el avance y su documento.')
       }
 
       /*
@@ -880,9 +1046,7 @@ export default function StudentDashboard({
         monografia.id_monografia
       )
 
-      alert(
-        'Avance y documento registrados correctamente.'
-      )
+      alert(data.message || 'Avance y documento registrados correctamente.')
     } catch (error) {
       console.error(
         'Error al registrar avance:',
@@ -911,7 +1075,7 @@ export default function StudentDashboard({
     ) => {
       try {
         const response =
-          await fetch(
+          await apiFetch(
             `${API_URL}/api/notificaciones/${idNotificacion}/leida`,
             {
               method: 'PUT',
@@ -957,7 +1121,7 @@ export default function StudentDashboard({
 
       try {
         const response =
-          await fetch(
+          await apiFetch(
             `${API_URL}/api/notificaciones/usuario/${usuario.id}/marcar-todas-leidas`,
             {
               method: 'PUT',
@@ -992,14 +1156,6 @@ export default function StudentDashboard({
   */
 
   const handleLogout = () => {
-    localStorage.removeItem(
-      'sigmo_token'
-    )
-
-    localStorage.removeItem(
-      'sigmo_user'
-    )
-
     onLogout()
   }
 
@@ -1821,24 +1977,130 @@ export default function StudentDashboard({
                 Cargando información...
               </div>
             ) : !monografia ? (
-              <div className="rounded-xl border bg-white p-8 text-center shadow-sm">
+              <div className="space-y-6">
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-5">
+                  <div className="flex items-start gap-3">
+                    <PlusCircle className="mt-1 text-blue-700" size={28} />
+                    <div>
+                      <h3 className="font-semibold text-blue-950">Registrar propuesta de monografía</h3>
+                      <p className="mt-1 text-sm text-blue-800">Completa los datos académicos, agrega a tu equipo y adjunta el protocolo en formato PDF. El título se validará para evitar duplicados.</p>
+                    </div>
+                  </div>
+                </div>
 
-                <AlertCircle
-                  className="mx-auto text-amber-500"
-                  size={40}
-                />
+                {mensajePropuesta && <div role="status" className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">{mensajePropuesta}</div>}
+                {errorPropuesta && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{errorPropuesta}</div>}
 
-                <h3 className="mt-3 font-semibold text-slate-800">
-                  No hay monografía
-                  registrada
-                </h3>
+                <form onSubmit={enviarPropuesta} className="space-y-5 rounded-xl border bg-white p-6 shadow-sm">
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <label htmlFor="propuesta-titulo" className="mb-2 block text-sm font-medium text-slate-700">Título de la propuesta *</label>
+                      <input id="propuesta-titulo" required maxLength={250} value={propuestaForm.titulo} onChange={(e) => setPropuestaForm((actual) => ({ ...actual, titulo: e.target.value }))} className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Escribe el título de tu monografía" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label htmlFor="propuesta-descripcion" className="mb-2 block text-sm font-medium text-slate-700">Descripción de la propuesta *</label>
+                      <textarea id="propuesta-descripcion" required rows={5} value={propuestaForm.descripcion} onChange={(e) => setPropuestaForm((actual) => ({ ...actual, descripcion: e.target.value }))} className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" placeholder="Describe el problema, propósito y alcance de la propuesta" />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Carrera</label>
+                      <input readOnly value={perfil?.carrera || 'Carrera no registrada'} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-600" />
+                    </div>
+                    <div>
+                      <label htmlFor="propuesta-ciclo" className="mb-2 block text-sm font-medium text-slate-700">Ciclo académico *</label>
+                      <select id="propuesta-ciclo" required value={propuestaForm.id_ciclo} onChange={(e) => setPropuestaForm((actual) => ({ ...actual, id_ciclo: e.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500">
+                        <option value="">Selecciona un ciclo</option>
+                        {ciclosPropuesta.map((ciclo) => <option key={ciclo.id_ciclo} value={ciclo.id_ciclo}>{ciclo.nombre}</option>)}
+                      </select>
+                    </div>
+                  </div>
 
-                <p className="mt-2 text-sm text-slate-500">
-                  No encontramos una
-                  monografía asociada a tu
-                  cuenta.
-                </p>
+                  <div>
+                    <h4 className="mb-1 text-sm font-semibold text-slate-800">Integrantes del equipo</h4>
+                    <p className="mb-3 text-xs text-slate-500">Tu usuario se registra como responsable principal. Busca a tus compañeros por carnet. Puedes agregar hasta dos integrantes adicionales.</p>
 
+                    {propuestaForm.integrantes.length > 0 && (
+                      <div className="mb-3 space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Integrantes seleccionados</p>
+                        {propuestaForm.integrantes.map((idEstudiante) => {
+                          const estudiante = estudiantesDisponibles.find((item) => item.id_estudiante === idEstudiante)
+                          if (!estudiante) return null
+                          return (
+                            <div key={estudiante.id_estudiante} className="flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-slate-800">{estudiante.nombre} {estudiante.apellido}</p>
+                                <p className="text-xs text-slate-600">Carnet: {estudiante.carnet}</p>
+                              </div>
+                              <button type="button" onClick={() => setPropuestaForm((actual) => ({ ...actual, integrantes: actual.integrantes.filter((id) => id !== estudiante.id_estudiante) }))} className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50">Quitar</button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    <label htmlFor="buscar-integrante-carnet" className="mb-2 block text-sm font-medium text-slate-700">Buscar por carnet</label>
+                    <input
+                      id="buscar-integrante-carnet"
+                      type="text"
+                      value={busquedaCarnet}
+                      onChange={(event) => setBusquedaCarnet(event.target.value)}
+                      disabled={cargandoCatalogos || propuestaForm.integrantes.length >= 2}
+                      placeholder="Escribe el carnet del estudiante"
+                      autoComplete="off"
+                      className="w-full rounded-lg border border-slate-300 px-4 py-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                    />
+
+                    {cargandoCatalogos ? (
+                      <p className="mt-2 text-sm text-slate-500">Cargando ciclos y estudiantes...</p>
+                    ) : propuestaForm.integrantes.length >= 2 ? (
+                      <p className="mt-2 text-sm text-amber-700">Ya agregaste el máximo de dos integrantes adicionales. Quita uno para agregar otro.</p>
+                    ) : busquedaCarnet.trim().length === 0 ? (
+                      <p className="mt-2 text-xs text-slate-500">Escribe al menos parte del carnet para buscar estudiantes.</p>
+                    ) : (
+                      <div className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-2">
+                        {estudiantesDisponibles
+                          .filter((estudiante) => estudiante.carnet.toLowerCase().includes(busquedaCarnet.trim().toLowerCase()))
+                          .slice(0, 8)
+                          .map((estudiante) => {
+                            const seleccionado = propuestaForm.integrantes.includes(estudiante.id_estudiante)
+                            return (
+                              <div key={estudiante.id_estudiante} className="flex items-center justify-between gap-3 rounded-md p-3 hover:bg-slate-50">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium text-slate-800">{estudiante.nombre} {estudiante.apellido}</p>
+                                  <p className="break-all text-xs text-slate-500">Carnet: {estudiante.carnet} · {estudiante.correo}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={seleccionado}
+                                  onClick={() => {
+                                    setPropuestaForm((actual) => ({ ...actual, integrantes: [...actual.integrantes, estudiante.id_estudiante] }))
+                                    setBusquedaCarnet('')
+                                  }}
+                                  className="shrink-0 rounded-lg bg-blue-700 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                >
+                                  {seleccionado ? 'Agregado' : 'Agregar'}
+                                </button>
+                              </div>
+                            )
+                          })}
+                        {estudiantesDisponibles.filter((estudiante) => estudiante.carnet.toLowerCase().includes(busquedaCarnet.trim().toLowerCase())).length === 0 && (
+                          <p className="p-3 text-sm text-slate-500">No se encontró ningún estudiante con ese carnet.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="archivo-propuesta" className="mb-2 block text-sm font-medium text-slate-700">Protocolo en PDF * (máximo 10 MB)</label>
+                    <input id="archivo-propuesta" type="file" accept="application/pdf,.pdf" required onChange={(e) => setPropuestaForm((actual) => ({ ...actual, archivo: e.target.files?.[0] || null }))} className="block w-full rounded-lg border border-slate-300 p-3 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-medium file:text-blue-700 hover:file:bg-blue-100" />
+                    {propuestaForm.archivo && <p className="mt-2 text-xs text-slate-500">Archivo seleccionado: {propuestaForm.archivo.name}</p>}
+                  </div>
+
+                  <div className="flex justify-end border-t pt-4">
+                    <button type="submit" disabled={enviandoPropuesta || cargandoCatalogos} className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60">
+                      <Upload size={17} /> {enviandoPropuesta ? 'Enviando propuesta...' : 'Enviar propuesta'}
+                    </button>
+                  </div>
+                </form>
               </div>
             ) : (
               <div className="space-y-6">
@@ -1883,6 +2145,50 @@ export default function StudentDashboard({
                   </div>
 
                 </div>
+
+                {String(monografia.estado_propuesta || monografia.estado || '').trim().toUpperCase() === 'RECHAZADO' || String(monografia.estado_propuesta || monografia.estado || '').trim().toUpperCase() === 'RECHAZADA' ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-6 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="mt-0.5 shrink-0 text-red-600" size={24} />
+                      <div className="min-w-0 flex-1">
+                        <h2 className="font-semibold text-red-900">Protocolo rechazado: debes enviar una versión corregida</h2>
+                        <p className="mt-2 text-sm leading-6 text-red-800">
+                          Corrige el documento según las observaciones del coordinador y adjunta una nueva versión en PDF. La propuesta volverá a quedar pendiente de revisión.
+                        </p>
+                        {monografia.comentario_propuesta && (
+                          <div className="mt-3 rounded-lg border border-red-200 bg-white p-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Observaciones del coordinador</p>
+                            <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{monografia.comentario_propuesta}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {mensajeProtocoloCorregido && <div role="status" className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">{mensajeProtocoloCorregido}</div>}
+                    {errorProtocoloCorregido && <div role="alert" className="mt-4 rounded-lg border border-red-300 bg-white p-3 text-sm text-red-700">{errorProtocoloCorregido}</div>}
+
+                    <form onSubmit={reenviarProtocolo} className="mt-5 space-y-4">
+                      <div>
+                        <label htmlFor="archivo-protocolo-corregido" className="mb-2 block text-sm font-medium text-slate-700">Nuevo protocolo corregido (PDF, máximo 10 MB)</label>
+                        <input
+                          id="archivo-protocolo-corregido"
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          required
+                          disabled={enviandoProtocoloCorregido}
+                          onChange={(event) => setArchivoProtocoloCorregido(event.target.files?.[0] || null)}
+                          className="block w-full rounded-lg border border-red-200 bg-white p-3 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-red-50 file:px-4 file:py-2 file:font-medium file:text-red-700 hover:file:bg-red-100 disabled:opacity-60"
+                        />
+                        {archivoProtocoloCorregido && <p className="mt-2 text-xs text-slate-600">Seleccionado: {archivoProtocoloCorregido.name}</p>}
+                      </div>
+                      <div className="flex justify-end">
+                        <button type="submit" disabled={enviandoProtocoloCorregido || !archivoProtocoloCorregido} className="inline-flex items-center gap-2 rounded-lg bg-red-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60">
+                          <Upload size={17} /> {enviandoProtocoloCorregido ? 'Enviando protocolo corregido...' : 'Volver a enviar protocolo'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                ) : null}
 
                 <div className="rounded-xl border bg-white p-6 shadow-sm">
 
@@ -2033,7 +2339,7 @@ export default function StudentDashboard({
 
                     setShowModal(true)
                   }}
-                  disabled={!monografia}
+                  disabled={!monografia || !protocoloAceptado}
                   className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
                   <Upload
@@ -2055,6 +2361,17 @@ export default function StudentDashboard({
                   <p className="mt-3 text-slate-600">
                     No tienes una
                     monografía asociada.
+                  </p>
+                </div>
+              ) : !protocoloAceptado ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center shadow-sm">
+                  <Clock className="mx-auto text-amber-600" size={40} />
+                  <h3 className="mt-3 font-semibold text-amber-900">Avances bloqueados</h3>
+                  <p className="mt-2 text-sm text-amber-800">
+                    Tu protocolo todavía no ha sido aceptado. Podrás registrar avances cuando el coordinador apruebe la propuesta.
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-amber-900">
+                    Estado actual: {monografia.estado_propuesta || monografia.estado_protocolo || 'PENDIENTE DE REVISIÓN'}
                   </p>
                 </div>
               ) : avances.length ===
@@ -2296,10 +2613,9 @@ export default function StudentDashboard({
 
                                   <div className="flex gap-2">
 
-                                    <a
-                                      href={`${API_URL}/api/documentos/download/${documento.id_documento}`}
-                                      target="_blank"
-                                      rel="noreferrer"
+                                    <button
+                                      type="button"
+                                      onClick={() => void downloadAuthenticatedFile(`${API_URL}/api/documentos/download/${documento.id_documento}`, true).catch((error) => alert(error instanceof Error ? error.message : 'No se pudo abrir el archivo.'))}
                                       className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100"
                                     >
                                       <Eye
@@ -2307,10 +2623,11 @@ export default function StudentDashboard({
                                       />
 
                                       Ver
-                                    </a>
+                                    </button>
 
-                                    <a
-                                      href={`${API_URL}/api/documentos/download/${documento.id_documento}`}
+                                    <button
+                                      type="button"
+                                      onClick={() => void downloadAuthenticatedFile(`${API_URL}/api/documentos/download/${documento.id_documento}`).catch((error) => alert(error instanceof Error ? error.message : 'No se pudo descargar el archivo.'))}
                                       className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700"
                                     >
                                       <Download
@@ -2318,7 +2635,7 @@ export default function StudentDashboard({
                                       />
 
                                       Descargar
-                                    </a>
+                                    </button>
 
                                   </div>
 
@@ -2345,53 +2662,13 @@ export default function StudentDashboard({
 
           {section ===
             'calendario' && (
-            <div className="space-y-6">
-
-              <div>
-                <h1 className="text-2xl font-bold text-slate-800">
-                  Calendario de Defensa
-                </h1>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Consulta la información
-                  relacionada con tu defensa
-                  monográfica.
-                </p>
-              </div>
-
-              <div className="rounded-xl border bg-white p-8 text-center shadow-sm">
-
-                <Calendar
-                  className="mx-auto text-blue-600"
-                  size={48}
-                />
-
-                <h2 className="mt-4 text-xl font-semibold text-slate-800">
-                  Defensa pendiente
-                </h2>
-
-                <p className="mt-2 text-sm text-slate-500">
-                  La fecha de defensa será
-                  asignada por la
-                  coordinación.
-                </p>
-
-                <div className="mx-auto mt-6 max-w-md rounded-xl bg-blue-50 p-5">
-
-                  <p className="text-xs uppercase tracking-wide text-blue-500">
-                    Estado
-                  </p>
-
-                  <p className="mt-1 font-semibold text-blue-700">
-                    Pendiente de
-                    programación
-                  </p>
-
-                </div>
-
-              </div>
-
-            </div>
+            <DefensaPanel
+              role="ESTUDIANTE"
+              monografias={monografia ? [{
+                id_monografia: monografia.id_monografia,
+                titulo: monografia.titulo,
+              }] : []}
+            />
           )}
 
           {/* ==================================================== */}
@@ -2716,7 +2993,7 @@ export default function StudentDashboard({
         mientras escribes.
       */}
 
-      {showModal && (
+      {showModal && monografia && protocoloAceptado && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
 
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl">
@@ -2792,7 +3069,7 @@ export default function StudentDashboard({
                     )
                   }}
                   disabled={
-                    submitting
+                    submitting || loadingEtapas || etapasCargables.length === 0
                   }
                   className="w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
                 >
@@ -2801,7 +3078,7 @@ export default function StudentDashboard({
                     Seleccionar etapa
                   </option>
 
-                  {ETAPAS_CARGABLES.map(
+                  {etapasCargables.map(
                     (etapa) => (
                       <option
                         key={
@@ -2820,12 +3097,15 @@ export default function StudentDashboard({
 
                 </select>
 
+                {loadingEtapas && <p role="status" className="mt-2 text-xs text-slate-500">Cargando etapas…</p>}
+                {errorEtapas && <p role="alert" className="mt-2 text-xs text-red-600">{errorEtapas}</p>}
+
                 {formData.id_etapa && (
                   <p className="mt-2 text-xs text-blue-600">
                     Etapa seleccionada:{' '}
                     <strong>
                       {
-                        ETAPAS_CARGABLES.find(
+                        etapasCargables.find(
                           (etapa) =>
                             etapa.id ===
                             Number(

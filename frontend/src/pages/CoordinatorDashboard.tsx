@@ -17,6 +17,7 @@ import {
   FileText,
 
   Users,
+  Calendar,
 
   BarChart2,
 
@@ -73,31 +74,14 @@ import {
 
 
 import StatusBadge from '../components/StatusBadge'
-
 import Modal from '../components/Modal'
+import DefensaPanel from '../components/DefensaPanel'
+import { API_URL, apiFetch, downloadAuthenticatedFile } from '../config/api'
 
 
 
 /* =========================================================
-
-   CONFIGURACIÓN
-
-\========================================================= */
-
-
-
-const API_URL =
-
-  import.meta.env.VITE_API_URL ||
-
-  'http://localhost:3000'
-
-
-
-/* =========================================================
-
    PROPS
-
 \========================================================= */
 
 
@@ -129,6 +113,8 @@ type Section =
   | 'reportes'
 
   | 'perfil'
+  | 'protocolos'
+  | 'defensas'
 
 
 
@@ -150,6 +136,10 @@ interface MonografiaAPI {
   descripcion: string | null
 
   estado: string
+
+  estado_propuesta: string
+
+  estado_protocolo: string | null
 
   fecha_registro: string
 
@@ -192,6 +182,18 @@ interface MonografiaAPI {
 }
 
 
+
+interface ProtocoloPendiente {
+  id_protocolo: number
+  id_monografia: number
+  numero_version: number
+  nombre_original: string
+  estado_protocolo: string
+  fecha_subida: string
+  titulo: string
+  descripcion: string | null
+  estado_propuesta: string
+}
 
 interface TutorAPI {
 
@@ -257,6 +259,10 @@ interface Monografia {
 
   estado: string
 
+  estadoPropuesta: string
+
+  estadoProtocolo: string | null
+
   ciclo: string
 
   fechaRegistro: string
@@ -307,6 +313,17 @@ const navItems = [
     icon: FileText,
 
   },
+  {
+    id: 'protocolos' as Section,
+    label: 'Revisión de protocolos',
+    icon: FileText,
+  },
+  {
+    id: 'defensas' as Section,
+    label: 'Defensas',
+    icon: Calendar,
+  },
+
 
   {
 
@@ -376,6 +393,10 @@ const normalizarEstado = (
 
       return 'Rechazado'
 
+    case 'RECHAZADA':
+
+      return 'Rechazada'
+
 
 
     case 'PENDIENTE':
@@ -403,6 +424,10 @@ const normalizarEstado = (
     case 'EN PROCESO':
 
       return 'En proceso'
+
+    case 'FINALIZADA':
+
+      return 'Finalizada'
 
 
 
@@ -588,6 +613,21 @@ export default function CoordinatorDashboard({
 
     useState<AvanceAPI[]>([])
 
+  const [protocolosPendientes, setProtocolosPendientes] =
+    useState<ProtocoloPendiente[]>([])
+
+  const [cargandoProtocolos, setCargandoProtocolos] =
+    useState(false)
+
+  const [errorProtocolos, setErrorProtocolos] =
+    useState('')
+
+  const [comentariosProtocolo, setComentariosProtocolo] =
+    useState<Record<number, string>>({})
+
+  const [revisandoProtocolo, setRevisandoProtocolo] =
+    useState<number | null>(null)
+
 
 
   const [cargandoDatos, setCargandoDatos] =
@@ -722,13 +762,13 @@ export default function CoordinatorDashboard({
 
         ] = await Promise.all([
 
-          fetch(
+          apiFetch(
 
             `${API_URL}/api/coordinador/monografias`
 
           ),
 
-          fetch(
+          apiFetch(
 
             `${API_URL}/api/coordinador/tutores`
 
@@ -928,6 +968,10 @@ export default function CoordinatorDashboard({
 
           normalizarEstado(m.estado),
 
+        estadoPropuesta: m.estado_propuesta,
+
+        estadoProtocolo: m.estado_protocolo,
+
 
 
         ciclo: m.ciclo,
@@ -1124,7 +1168,7 @@ export default function CoordinatorDashboard({
 
 
 
-      const response = await fetch(
+      const response = await apiFetch(
 
         `${API_URL}/api/avances/monografia/${idMonografia}`
 
@@ -1208,7 +1252,7 @@ export default function CoordinatorDashboard({
 
     try {
 
-      const response = await fetch(
+      const response = await apiFetch(
 
         `${API_URL}/api/coordinador/monografias/${idMonografia}/tutor`,
 
@@ -1311,6 +1355,88 @@ export default function CoordinatorDashboard({
   ======================================================= */
 
 
+
+  const cargarProtocolosPendientes = async () => {
+    try {
+      setCargandoProtocolos(true)
+      setErrorProtocolos('')
+
+      const response = await apiFetch(`${API_URL}/api/protocolos/pendientes`)
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'No se pudieron cargar los protocolos.')
+      }
+
+      setProtocolosPendientes(data.protocolos || [])
+    } catch (error) {
+      console.error('Error al cargar protocolos:', error)
+      setErrorProtocolos(
+        error instanceof Error ? error.message : 'No se pudieron cargar los protocolos.'
+      )
+    } finally {
+      setCargandoProtocolos(false)
+    }
+  }
+
+  const revisarProtocolo = async (
+    protocolo: ProtocoloPendiente,
+    estado: 'APROBADO' | 'RECHAZADO'
+  ) => {
+    const comentario = (comentariosProtocolo[protocolo.id_protocolo] || '').trim()
+
+    if (estado === 'RECHAZADO' && !comentario) {
+      alert('Escribe el motivo del rechazo antes de continuar.')
+      return
+    }
+
+    const confirmar = window.confirm(
+      estado === 'APROBADO'
+        ? `¿Deseas aprobar el protocolo de "${protocolo.titulo}"?`
+        : `¿Deseas rechazar el protocolo de "${protocolo.titulo}"?`
+    )
+    if (!confirmar) return
+
+    try {
+      setRevisandoProtocolo(protocolo.id_protocolo)
+      const response = await apiFetch(
+        `${API_URL}/api/protocolos/${protocolo.id_protocolo}/revisar`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            estado,
+            comentario_revision: comentario,
+          }),
+        }
+      )
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'No se pudo registrar la revisión.')
+      }
+
+      alert(data.message || 'Revisión registrada correctamente.')
+      setComentariosProtocolo(actual => {
+        const siguiente = { ...actual }
+        delete siguiente[protocolo.id_protocolo]
+        return siguiente
+      })
+      await cargarProtocolosPendientes()
+      await cargarDatosCoordinador()
+    } catch (error) {
+      console.error('Error al revisar protocolo:', error)
+      alert(error instanceof Error ? error.message : 'No se pudo registrar la revisión.')
+    } finally {
+      setRevisandoProtocolo(null)
+    }
+  }
+
+  useEffect(() => {
+    if (section === 'protocolos') {
+      cargarProtocolosPendientes()
+    }
+  }, [section])
 
   const navigate = (
 
@@ -1828,6 +1954,26 @@ export default function CoordinatorDashboard({
 
 
 
+              {section === 'protocolos' && (
+                <GestionProtocolos
+                  protocolos={protocolosPendientes}
+                  cargando={cargandoProtocolos}
+                  error={errorProtocolos}
+                  comentarios={comentariosProtocolo}
+                  revisandoId={revisandoProtocolo}
+                  onComentarioChange={(id, valor) =>
+                    setComentariosProtocolo(actual => ({
+                      ...actual,
+                      [id]: valor,
+                    }))
+                  }
+                  onRefresh={cargarProtocolosPendientes}
+                  onReview={revisarProtocolo}
+                />
+              )}
+
+              {section === 'defensas' && <DefensaPanel role="COORDINADOR" />}
+
               {section === 'asignar' && (
 
                 <AsignarTutorTribunal
@@ -2324,6 +2470,155 @@ export default function CoordinatorDashboard({
 
 
 /* =========================================================
+   REVISIÓN DE PROTOCOLOS
+========================================================= */
+
+function GestionProtocolos({
+  protocolos,
+  cargando,
+  error,
+  comentarios,
+  revisandoId,
+  onComentarioChange,
+  onRefresh,
+  onReview,
+}: {
+  protocolos: ProtocoloPendiente[]
+  cargando: boolean
+  error: string
+  comentarios: Record<number, string>
+  revisandoId: number | null
+  onComentarioChange: (id: number, valor: string) => void
+  onRefresh: () => void
+  onReview: (
+    protocolo: ProtocoloPendiente,
+    estado: 'APROBADO' | 'RECHAZADO'
+  ) => void
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-serif text-xl text-slate-800">Revisión de protocolos</h2>
+          <p className="text-sm text-slate-500">
+            Revisa el PDF de cada propuesta y registra una decisión.
+          </p>
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={cargando}
+          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          <RefreshCw size={15} className={cargando ? 'animate-spin' : ''} />
+          Actualizar
+        </button>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {cargando ? (
+        <div className="flex min-h-48 items-center justify-center gap-3 text-slate-500">
+          <Loader2 size={22} className="animate-spin text-violet-600" />
+          Cargando protocolos...
+        </div>
+      ) : protocolos.length === 0 ? (
+        <div className="rounded-2xl border border-slate-100 bg-white p-10 text-center">
+          <FileText size={30} className="mx-auto mb-3 text-slate-300" />
+          <h3 className="font-semibold text-slate-700">No hay protocolos pendientes</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Las nuevas propuestas aparecerán aquí cuando sean registradas.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {protocolos.map(protocolo => (
+            <article
+              key={protocolo.id_protocolo}
+              className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                      Pendiente
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      Monografía #{protocolo.id_monografia}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      Versión {protocolo.numero_version}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-semibold text-slate-800">{protocolo.titulo}</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {protocolo.descripcion || 'Sin descripción registrada.'}
+                  </p>
+                  <p className="mt-2 text-xs text-slate-400">
+                    Enviado: {formatearFecha(protocolo.fecha_subida)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void downloadAuthenticatedFile(`${API_URL}/api/protocolos/${protocolo.id_protocolo}/descargar`, true).catch((error) => alert(error instanceof Error ? error.message : 'No se pudo abrir el archivo.'))}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-violet-200 px-3 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50"
+                >
+                  <FileText size={15} />
+                  Ver / descargar PDF
+                </button>
+              </div>
+
+              <div className="mt-5">
+                <label
+                  htmlFor={`comentario-protocolo-${protocolo.id_protocolo}`}
+                  className="mb-1.5 block text-sm font-medium text-slate-700"
+                >
+                  Comentario de revisión
+                </label>
+                <textarea
+                  id={`comentario-protocolo-${protocolo.id_protocolo}`}
+                  value={comentarios[protocolo.id_protocolo] || ''}
+                  onChange={event =>
+                    onComentarioChange(protocolo.id_protocolo, event.target.value)
+                  }
+                  rows={3}
+                  placeholder="Escribe observaciones o el motivo del rechazo..."
+                  className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                />
+                <p className="mt-1 text-xs text-slate-400">
+                  El comentario es obligatorio si rechazas el protocolo.
+                </p>
+              </div>
+
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <button
+                  onClick={() => onReview(protocolo, 'RECHAZADO')}
+                  disabled={revisandoId !== null}
+                  className="rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {revisandoId === protocolo.id_protocolo ? 'Procesando...' : 'Rechazar'}
+                </button>
+                <button
+                  onClick={() => onReview(protocolo, 'APROBADO')}
+                  disabled={revisandoId !== null}
+                  className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                >
+                  {revisandoId === protocolo.id_protocolo ? 'Procesando...' : 'Aprobar protocolo'}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+/* =========================================================
 
    INICIO
 
@@ -2351,7 +2646,7 @@ function InicioCoord({
 
     monografias.filter(
 
-      m => m.estado === 'Aprobado'
+      m => m.estadoPropuesta === 'APROBADO'
 
     ).length
 
@@ -2361,7 +2656,7 @@ function InicioCoord({
 
     monografias.filter(
 
-      m => m.estado === 'Rechazado'
+      m => m.estadoPropuesta === 'RECHAZADO'
 
     ).length
 
@@ -2371,7 +2666,7 @@ function InicioCoord({
 
     monografias.filter(
 
-      m => m.estado === 'Pendiente'
+      m => m.estadoPropuesta === 'PENDIENTE'
 
     ).length
 
@@ -2383,11 +2678,7 @@ function InicioCoord({
 
       m =>
 
-        m.estado === 'En proceso' ||
-
-        m.estado === 'Enviado' ||
-
-        m.estado === 'En revisión'
+        m.estado === 'En proceso'
 
     ).length
 
@@ -2813,15 +3104,11 @@ function GestionMonografias({
 
     'En proceso',
 
-    'Aprobado',
-
-    'En revisión',
-
-    'Enviado',
-
     'Pendiente',
 
-    'Rechazado',
+    'Finalizada',
+
+    'Rechazada',
 
   ]
 
@@ -4205,17 +4492,13 @@ function Reportes({
 
     {
 
-      name: 'Aprobado',
+      name: 'En proceso',
 
       value:
 
         monografias.filter(
 
-          m =>
-
-            m.estado ===
-
-            'Aprobado'
+          m => m.estado === 'En proceso'
 
         ).length,
 
@@ -4223,35 +4506,13 @@ function Reportes({
 
     {
 
-      name: 'En revisión',
+      name: 'Finalizada',
 
       value:
 
         monografias.filter(
 
-          m =>
-
-            m.estado ===
-
-            'En revisión'
-
-        ).length,
-
-    },
-
-    {
-
-      name: 'Enviado',
-
-      value:
-
-        monografias.filter(
-
-          m =>
-
-            m.estado ===
-
-            'Enviado'
+          m => m.estado === 'Finalizada'
 
         ).length,
 
@@ -4277,17 +4538,13 @@ function Reportes({
 
     {
 
-      name: 'Rechazado',
+      name: 'Rechazada',
 
       value:
 
         monografias.filter(
 
-          m =>
-
-            m.estado ===
-
-            'Rechazado'
+          m => m.estado === 'Rechazada'
 
         ).length,
 
@@ -4935,9 +5192,7 @@ function Reportes({
 
                   m =>
 
-                    m.estado ===
-
-                    'Aprobado'
+                    m.estadoPropuesta === 'APROBADO'
 
                 ).length
 
@@ -4953,7 +5208,7 @@ function Reportes({
 
           <div className="mt-5 bg-slate-50 rounded-xl p-3 text-xs text-slate-500">
 
-            Las defensas programadas todavía no se muestran aquí porque aún no existe un endpoint de defensas conectado al dashboard.
+            Consulta y programa defensas desde la sección Defensas del menú.
 
           </div>
 

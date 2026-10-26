@@ -1,28 +1,36 @@
 import { Router } from 'express'
-
 import {
   getAvancesByMonografia,
-  createAvance,
+  getEtapasAvance,
+  createAvanceWithDocument,
   revisarAvance,
 } from '../controllers/avanceController'
+import { requireRoles } from '../middleware/authMiddleware'
+import { requireResourceAccess } from '../middleware/resourceAuthorization'
+import { uploadAvancePdf } from '../middleware/avancePdfUpload'
 
 const router = Router()
 
-// Obtener avances de una monografía
+router.get('/etapas', getEtapasAvance)
+
 router.get(
   '/monografia/:id_monografia',
+  requireResourceAccess('monografia', 'id_monografia'),
   getAvancesByMonografia
 )
 
-// Crear avance
 router.post(
   '/',
-  createAvance
+  requireRoles('ESTUDIANTE'),
+  uploadAvancePdf,
+  requireResourceAccess('monografia', 'body:id_monografia'),
+  createAvanceWithDocument
 )
 
-// Revisar avance como tutor
 router.put(
   '/:id_avance/revisar',
+  requireRoles('TUTOR'),
+  requireResourceAccess('avance', 'id_avance'),
   revisarAvance
 )
 

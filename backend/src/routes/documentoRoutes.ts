@@ -8,6 +8,9 @@ import {
   uploadDocumento,
   downloadDocumento,
 } from '../controllers/documentoController'
+import { requireRoles } from '../middleware/authMiddleware'
+import { requireResourceAccess } from '../middleware/resourceAuthorization'
+import { validateUploadedContent } from '../middleware/validateUploadedContent'
 
 const router = Router()
 
@@ -62,9 +65,7 @@ const fileFilter: multer.Options['fileFilter'] =
       cb(null, true)
     } else {
       cb(
-        new Error(
-          'Solo se permiten archivos PDF'
-        )
+        Object.assign(new Error('Solo se permiten archivos PDF'), { status: 400 })
       )
     }
   }
@@ -80,17 +81,22 @@ const upload = multer({
 
 router.get(
   '/avance/:id_avance',
+  requireResourceAccess('avance', 'id_avance'),
   getDocumentosByAvance
 )
 
 router.get(
   '/download/:id_documento',
+  requireResourceAccess('documento', 'id_documento'),
   downloadDocumento
 )
 
 router.post(
   '/upload',
+  requireRoles('ESTUDIANTE'),
   upload.single('archivo'),
+  validateUploadedContent('pdf'),
+  requireResourceAccess('avance', 'body:id_avance'),
   uploadDocumento
 )
 

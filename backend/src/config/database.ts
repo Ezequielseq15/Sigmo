@@ -12,22 +12,11 @@ const pool = new Pool({
 })
 
 pool.on('connect', () => {
-  console.log('✅ Conexión establecida con PostgreSQL')
+  console.info('Conexión establecida con PostgreSQL')
 })
 
-pool.on('error', (error: Error) => {
-  console.error('❌ Error en el pool de PostgreSQL:', error)
+pool.on('error', () => {
+  console.error('Error inesperado en el pool de PostgreSQL (detalles omitidos)')
 })
-
-// Prueba de conexión
-pool.query('SELECT NOW()')
-  .then((result) => {
-    console.log('✅ PostgreSQL está funcionando')
-    console.log('🕐 Hora de PostgreSQL:', result.rows[0].now)
-  })
-  .catch((error: Error) => {
-    console.error('❌ No se pudo conectar a PostgreSQL')
-    console.error('Detalles:', error.message)
-  })
 
 export default pool

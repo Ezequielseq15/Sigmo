@@ -7,6 +7,7 @@ import {
   marcarNotificacionLeida,
   marcarTodasLeidas,
 } from '../controllers/notificacionController'
+import { requireRoles } from '../middleware/authMiddleware'
 
 const router = Router()
 
@@ -22,6 +23,7 @@ router.get(
 
 router.post(
   '/',
+  requireRoles('COORDINADOR'),
   crearNotificacion
 )
 
