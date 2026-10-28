@@ -17,7 +17,9 @@ const uploadSinglePdf = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, callback) => {
-    if (file.mimetype !== 'application/pdf' || path.extname(file.originalname).toLowerCase() !== '.pdf') {
+    // Browsers may send an empty or generic MIME type for a legitimate PDF.
+    // The controller validates the actual PDF signature after upload.
+    if (path.extname(file.originalname).toLowerCase() !== '.pdf') {
       const error = Object.assign(new Error('Invalid PDF'), { status: 400 })
       callback(error)
       return

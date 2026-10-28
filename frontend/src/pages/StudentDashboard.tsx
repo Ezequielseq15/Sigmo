@@ -258,13 +258,8 @@ export default function StudentDashboard({
   */
 
 
-  const protocoloAceptado = [
-    monografia?.estado_propuesta,
-    monografia?.estado_protocolo,
-  ].some((estado) =>
-    String(estado || '').trim().toUpperCase() === 'APROBADO' ||
-    String(estado || '').trim().toUpperCase() === 'ACEPTADO'
-  )
+  const protocoloAceptado =
+    String(monografia?.estado_protocolo || '').trim().toUpperCase() === 'APROBADO'
 
   useEffect(() => {
     const usuarioGuardado =
@@ -313,7 +308,12 @@ export default function StudentDashboard({
           ? data.etapas.map((item: { id_etapa: number; nombre: string }) => ({
               id: Number(item.id_etapa),
               nombre: String(item.nombre),
-            })).filter((item: Etapa) => Number.isInteger(item.id) && item.id > 0 && item.nombre)
+            })).filter((item: Etapa) =>
+              Number.isInteger(item.id) &&
+              item.id > 0 &&
+              item.nombre.trim().length > 0 &&
+              !['propuesta', 'defensa'].includes(item.nombre.trim().toLocaleLowerCase())
+            )
           : []
         if (!cancelled) setEtapasCargables(etapas)
       } catch (error) {
@@ -973,10 +973,7 @@ export default function StudentDashboard({
       return
     }
 
-    if (
-      formData.archivo.type !==
-      'application/pdf'
-    ) {
+    if (!formData.archivo.name.toLowerCase().endsWith('.pdf')) {
       alert(
         'Solo se permiten archivos PDF.'
       )
@@ -1315,7 +1312,7 @@ export default function StudentDashboard({
   */
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="sigmo-dashboard sigmo-dashboard--student min-h-screen bg-slate-50">
 
       {/* ========================================================= */}
       {/* SIDEBAR */}
@@ -2368,7 +2365,7 @@ export default function StudentDashboard({
                   <Clock className="mx-auto text-amber-600" size={40} />
                   <h3 className="mt-3 font-semibold text-amber-900">Avances bloqueados</h3>
                   <p className="mt-2 text-sm text-amber-800">
-                    Tu protocolo todavía no ha sido aceptado. Podrás registrar avances cuando el coordinador apruebe la propuesta.
+                    La última versión de tu protocolo todavía no está aprobada. Podrás registrar avances cuando el coordinador la apruebe.
                   </p>
                   <p className="mt-2 text-sm font-medium text-amber-900">
                     Estado actual: {monografia.estado_propuesta || monografia.estado_protocolo || 'PENDIENTE DE REVISIÓN'}
@@ -3249,10 +3246,7 @@ export default function StudentDashboard({
                         return
                       }
 
-                      if (
-                        archivo.type !==
-                        'application/pdf'
-                      ) {
+                      if (!archivo.name.toLowerCase().endsWith('.pdf')) {
                         alert(
                           'Solo se permiten archivos PDF.'
                         )

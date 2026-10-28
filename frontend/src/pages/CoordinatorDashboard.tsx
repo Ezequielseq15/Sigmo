@@ -6,6 +6,8 @@ import {
 
   useState,
 
+  type FormEvent,
+
 } from 'react'
 
 
@@ -40,6 +42,8 @@ import {
   Loader2,
 
   RefreshCw,
+
+  Plus,
 
 } from 'lucide-react'
 
@@ -1464,7 +1468,7 @@ export default function CoordinatorDashboard({
 
   return (
 
-    <div className="h-full flex bg-slate-50">
+    <div className="sigmo-dashboard sigmo-dashboard--coordinator h-full flex bg-slate-50">
 
 
 
@@ -3668,12 +3672,6 @@ function AsignarTutorTribunal({
 
 
 
-  const [miembros, setMiembros] =
-
-    useState<string[]>([''])
-
-
-
   const monografiaSeleccionada =
 
     monografias.find(
@@ -4280,168 +4278,7 @@ function AsignarTutorTribunal({
 
 
 
-      {tab === 'jurado' && (
-
-        <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
-
-
-
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-
-
-
-            <div className="font-semibold text-amber-800 text-sm mb-1">
-
-              Módulo de jurado
-
-            </div>
-
-
-
-            <p className="text-xs text-amber-700 leading-relaxed">
-
-              La interfaz está preparada, pero la asignación de jurados todavía requiere la tabla y los endpoints correspondientes en el backend. No se realizará una asignación ficticia.
-
-            </p>
-
-
-
-          </div>
-
-
-
-          <div>
-
-
-
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-
-              Seleccionar monografía
-
-            </label>
-
-
-
-            <select
-
-              disabled
-
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-100 text-slate-400"
-
-            >
-
-
-
-              <option>
-
-                — Módulo pendiente de API —
-
-              </option>
-
-
-
-            </select>
-
-
-
-          </div>
-
-
-
-          <div>
-
-
-
-            <div className="flex items-center justify-between mb-1.5">
-
-
-
-              <label className="text-sm font-medium text-slate-700">
-
-                Miembros del jurado
-
-              </label>
-
-
-
-              <button
-
-                disabled
-
-                onClick={() =>
-
-                  setMiembros(
-
-                    miembros => [
-
-                      ...miembros,
-
-                      '',
-
-                    ]
-
-                  )
-
-                }
-
-                className="text-xs text-slate-400"
-
-              >
-
-                + Agregar
-
-              </button>
-
-
-
-            </div>
-
-
-
-            <div className="space-y-2">
-
-
-
-              {miembros.map(
-
-                (_, index) => (
-
-                  <select
-
-                    key={index}
-
-                    disabled
-
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-slate-100 text-slate-400"
-
-                  >
-
-                    <option>
-
-                      — API de jurados pendiente —
-
-                    </option>
-
-                  </select>
-
-                )
-
-              )}
-
-
-
-            </div>
-
-
-
-          </div>
-
-
-
-        </div>
-
-      )}
-
+      {tab === 'jurado' && <GestionJurado />}
 
 
     </div>
@@ -4450,6 +4287,183 @@ function AsignarTutorTribunal({
 
 }
 
+
+type DefensaParaJurado = {
+  id_defensa: number
+  id_monografia: number
+  titulo: string
+  fecha: string
+  hora: string
+  lugar: string
+  estado_defensa: string
+  miembros_jurado: Array<{ id_miembro: number; nombre_completo: string }>
+}
+
+function GestionJurado() {
+  const [defensas, setDefensas] = useState<DefensaParaJurado[]>([])
+  const [idDefensa, setIdDefensa] = useState('')
+  const [miembros, setMiembros] = useState<string[]>([''])
+  const [cargando, setCargando] = useState(true)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
+  const [mensaje, setMensaje] = useState('')
+
+  useEffect(() => {
+    let vigente = true
+    const cargarDefensas = async () => {
+      setCargando(true)
+      setError('')
+      try {
+        const response = await apiFetch(`${API_URL}/api/defensas/gestion`)
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error(data.message || 'No se pudieron cargar las defensas.')
+        }
+        const programadas = (Array.isArray(data.defensas) ? data.defensas : [])
+          .filter((item: DefensaParaJurado) => item.id_defensa && item.estado_defensa === 'PROGRAMADA')
+          .map((item: DefensaParaJurado) => ({
+            ...item,
+            miembros_jurado: Array.isArray(item.miembros_jurado) ? item.miembros_jurado : [],
+          }))
+        if (vigente) setDefensas(programadas)
+      } catch (cause) {
+        if (vigente) setError(cause instanceof Error ? cause.message : 'No se pudieron cargar las defensas.')
+      } finally {
+        if (vigente) setCargando(false)
+      }
+    }
+    void cargarDefensas()
+    return () => { vigente = false }
+  }, [])
+
+  const defensaSeleccionada = defensas.find(item => String(item.id_defensa) === idDefensa)
+
+  const seleccionarDefensa = (value: string) => {
+    setIdDefensa(value)
+    setMensaje('')
+    const selected = defensas.find(item => String(item.id_defensa) === value)
+    setMiembros(selected?.miembros_jurado.length
+      ? selected.miembros_jurado.map(member => member.nombre_completo)
+      : [''])
+  }
+
+  const guardarJurado = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!defensaSeleccionada) return
+    setGuardando(true)
+    setError('')
+    setMensaje('')
+    const names = miembros.map(name => name.trim()).filter(Boolean)
+    try {
+      const response = await apiFetch(
+        `${API_URL}/api/defensas/${defensaSeleccionada.id_defensa}/jurado`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ miembros: names }),
+        }
+      )
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.message || 'No se pudo guardar el jurado.')
+      const updatedMembers = Array.isArray(data.miembros) ? data.miembros : []
+      setDefensas(current => current.map(item => item.id_defensa === defensaSeleccionada.id_defensa
+        ? { ...item, miembros_jurado: updatedMembers }
+        : item))
+      setMiembros(updatedMembers.length ? updatedMembers.map((item: { nombre_completo: string }) => item.nombre_completo) : [''])
+      setMensaje('La lista del jurado se guardó correctamente.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo guardar el jurado.')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <div>
+        <h2 className="text-xl font-bold text-slate-800">Asignar jurado</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Registra los nombres de las personas invitadas a cada defensa programada. No necesitan cuentas de SIGMO.
+        </p>
+      </div>
+
+      {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {mensaje && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{mensaje}</p>}
+
+      <form onSubmit={guardarJurado} className="space-y-5 rounded-2xl border border-slate-100 bg-white p-5 sm:p-6">
+        {cargando ? (
+          <p role="status" className="text-sm text-slate-500">Cargando defensas programadas…</p>
+        ) : defensas.length === 0 ? (
+          <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+            No hay defensas programadas. Primero programa una defensa en la sección Defensas.
+          </p>
+        ) : (
+          <>
+            <label className="block text-sm font-medium text-slate-700">
+              Defensa
+              <select
+                value={idDefensa}
+                onChange={event => seleccionarDefensa(event.target.value)}
+                required
+                className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm"
+              >
+                <option value="">Selecciona una defensa programada</option>
+                {defensas.map(defensa => (
+                  <option key={defensa.id_defensa} value={defensa.id_defensa}>
+                    {defensa.titulo} · {String(defensa.fecha).slice(0, 10)} {String(defensa.hora).slice(0, 5)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {defensaSeleccionada && (
+              <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-slate-700">
+                <p className="font-semibold text-slate-800">{defensaSeleccionada.titulo}</p>
+                <p className="mt-1">{String(defensaSeleccionada.fecha).slice(0, 10)} · {String(defensaSeleccionada.hora).slice(0, 5)} · {defensaSeleccionada.lugar}</p>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="text-sm font-medium text-slate-700">Integrantes del jurado</label>
+                <button
+                  type="button"
+                  onClick={() => setMiembros(current => [...current, ''])}
+                  className="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
+                ><Plus size={16} />Agregar persona</button>
+              </div>
+              {miembros.map((nombre, index) => (
+                <div key={index} className="flex min-w-0 items-center gap-2">
+                  <input
+                    value={nombre}
+                    onChange={event => setMiembros(current => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))}
+                    maxLength={200}
+                    aria-label={`Nombre del integrante ${index + 1}`}
+                    placeholder="Nombre completo"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMiembros(current => current.filter((_, itemIndex) => itemIndex !== index))}
+                    aria-label={`Quitar integrante ${index + 1}`}
+                    className="shrink-0 rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"
+                  ><X size={16} /></button>
+                </div>
+              ))}
+              <p className="text-xs text-slate-500">Solo se guardan nombres. Los miembros del jurado no tienen rol, cuenta ni acceso al sistema.</p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!idDefensa || guardando}
+              className="w-full rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >{guardando ? 'Guardando…' : 'Guardar integrantes del jurado'}</button>
+          </>
+        )}
+      </form>
+    </div>
+  )
+}
 
 
 /* =========================================================

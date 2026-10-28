@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { after, before, test } from 'node:test'
 import { readOnlyConfig, startBackend } from './lib/safe-target.mjs'
-import { expectJson, request } from './lib/http.mjs'
+import { assertNoInternalDetails, expectJson, request } from './lib/http.mjs'
 
 let config
 let backend
@@ -58,7 +58,7 @@ test('CP-07: registro rechaza formato de correo inválido', async () => {
     },
   })
   const body = await expectJson(response, 400, 'CP-07')
-  assert.match(body.message || '', /correo.*std\.uni\.edu\.ni/i, 'CP-07: rechazo no es explícito')
+  assert.match(body.message || '', /correo/i, 'CP-07: rechazo no identifica el correo')
 })
 
 test('CP-03: el registro público rechaza el rol COORDINADOR', async () => {

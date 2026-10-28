@@ -103,6 +103,12 @@ test('CP-02 a CP-11: flujo aislado de registro, propiedad, creación y persisten
   const coordinator = await expectJson(coordinatorResponse, 200, 'CP-04 sesión coordinador')
   assert.equal(coordinator.user?.rol, 'COORDINADOR', 'CP-04: fixture coordinador no válido')
 
+  const stagesResponse = await request(config, '/api/avances/etapas', { token: student.token })
+  const stages = await expectJson(stagesResponse, 200, 'CP-03 etapas de avance')
+  assert.ok(Array.isArray(stages.etapas), 'CP-03: respuesta de etapas inválida')
+  assert.equal(stages.etapas.some(item => String(item.nombre).trim().toLowerCase() === 'propuesta'), false, 'CP-03: Propuesta aparece como etapa de avance')
+  assert.ok(stages.etapas.some(item => Number(item.id_etapa) === config.stageId), 'CP-03: la etapa sintética no está disponible')
+
   for (const [session, role] of [
     [studentLogin, 'ESTUDIANTE'], [tutorLogin, 'TUTOR'], [coordinator, 'COORDINADOR'],
   ]) {
@@ -176,6 +182,39 @@ test('CP-02 a CP-11: flujo aislado de registro, propiedad, creación y persisten
   const rejectedHistory = await expectJson(rejectedHistoryResponse, 200, 'CP-04 persistencia rechazo')
   assert.equal(rejectedHistory.protocolos?.[0]?.estado, 'RECHAZADO', 'CP-04: rechazo no persistió')
   assert.equal(Number(rejectedHistory.protocolos?.[0]?.revisado_por), Number(coordinator.user?.id), 'CP-04: rechazo no registró al coordinador autenticado')
+
+  const tutorConfirmation = await request(config, `/api/defensas/monografia/${ownerMonographId}/confirmacion`, {
+    method: 'PUT', token: tutor.token, json: { confirmada: true },
+  })
+  await expectJson(tutorConfirmation, 200, 'CP-04 confirmación de tutor')
+  const defenseDate = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const defenseResponse = await request(config, '/api/defensas', {
+    method: 'POST', token: coordinator.token,
+    json: { id_monografia: ownerMonographId, fecha: defenseDate, hora: '15:00', lugar: 'Aula sintética de pruebas', observaciones: 'Defensa de prueba automatizada.' },
+  })
+  const defenseBody = await expectJson(defenseResponse, 201, 'CP-04 programación de defensa')
+  const defenseId = Number(defenseBody.defensa?.id_defensa)
+  assert.ok(defenseId > 0, 'CP-04: no se devolvió el ID de la defensa')
+
+  const syntheticJury = [`Integrante sintético A ${suffix}`, `Integrante sintético B ${suffix}`]
+  const jurySaveResponse = await request(config, `/api/defensas/${defenseId}/jurado`, {
+    method: 'PUT', token: coordinator.token, json: { miembros: syntheticJury },
+  })
+  const jurySave = await expectJson(jurySaveResponse, 200, 'CP-04 asignación de jurado')
+  assert.deepEqual(jurySave.miembros?.map(item => item.nombre_completo), syntheticJury, 'CP-04: lista de jurado no persistió')
+
+  const juryOwnerResponse = await request(config, `/api/defensas/monografia/${ownerMonographId}`, { token: student.token })
+  const juryOwner = await expectJson(juryOwnerResponse, 200, 'CP-04 consulta de jurado por estudiante')
+  assert.deepEqual(juryOwner.defensa?.miembros_jurado?.map(item => item.nombre_completo), syntheticJury, 'CP-04: propietario no ve el jurado asignado')
+  const juryTutorResponse = await request(config, `/api/defensas/monografia/${ownerMonographId}`, { token: tutor.token })
+  const juryTutor = await expectJson(juryTutorResponse, 200, 'CP-04 consulta de jurado por tutor')
+  assert.deepEqual(juryTutor.defensa?.miembros_jurado?.map(item => item.nombre_completo), syntheticJury, 'CP-04: tutor asignado no ve el jurado')
+  const juryForeignResponse = await request(config, `/api/defensas/monografia/${ownerMonographId}`, { token: otherStudentLogin.token })
+  await expectJson(juryForeignResponse, 404, 'CP-11 acceso de otro estudiante al jurado')
+  const juryForbiddenResponse = await request(config, `/api/defensas/${defenseId}/jurado`, {
+    method: 'PUT', token: student.token, json: { miembros: ['Intento no autorizado'] },
+  })
+  await expectJson(juryForbiddenResponse, 403, 'CP-11 asignación de jurado por estudiante')
 
   const monographsCoordinatorResponse = await request(config, '/api/monografias', { token: coordinator.token })
   const monographsCoordinator = await expectJson(monographsCoordinatorResponse, 200, 'CP-02 listado coordinador')

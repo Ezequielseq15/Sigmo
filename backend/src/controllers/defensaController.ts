@@ -55,6 +55,7 @@ async function checkReadiness(client: PoolClient, idMonografia: number) {
             ut.activo AS tutor_activo,
             protocolo.id_protocolo AS id_protocolo_actual,
             protocolo.estado AS estado_protocolo,
+            documento_final.estado AS estado_documento_final,
             confirmacion.confirmada,
             confirmacion.id_usuario_tutor AS confirmada_por,
             confirmacion.id_protocolo AS id_protocolo_confirmacion
@@ -69,6 +70,15 @@ async function checkReadiness(client: PoolClient, idMonografia: number) {
           LIMIT 1
        ) protocolo ON TRUE
        LEFT JOIN LATERAL (
+         SELECT a.estado
+           FROM avances a
+           JOIN etapas_monografia etapa ON etapa.id_etapa = a.id_etapa
+          WHERE a.id_monografia = m.id_monografia
+            AND LOWER(BTRIM(etapa.nombre)) = 'documento final'
+          ORDER BY a.fecha_entrega DESC, a.id_avance DESC
+          LIMIT 1
+       ) documento_final ON TRUE
+       LEFT JOIN LATERAL (
          SELECT c.confirmada, c.id_usuario_tutor, c.id_protocolo
            FROM confirmaciones_defensa c
           WHERE c.id_monografia = m.id_monografia AND c.vigente = TRUE
@@ -82,17 +92,10 @@ async function checkReadiness(client: PoolClient, idMonografia: number) {
   return result.rows[0]
 }
 
-function hasCurrentReadiness(readiness: Record<string, unknown> | undefined): boolean {
-  return Boolean(
-    readiness &&
-    readiness.id_tutor &&
-    readiness.rol_tutor === 'TUTOR' &&
-    readiness.tutor_activo === true &&
-    readiness.estado_protocolo === 'APROBADO' &&
-    readiness.confirmada === true &&
-    Number(readiness.confirmada_por) === Number(readiness.id_usuario_tutor) &&
-    Number(readiness.id_protocolo_confirmacion) === Number(readiness.id_protocolo_actual)
-  )
+type MiembroJurado = {
+  id_miembro: number
+  nombre_completo: string
+  fecha_asignacion: string
 }
 
 export async function listarDefensasCoordinador(_req: Request, res: Response) {
@@ -102,6 +105,8 @@ export async function listarDefensasCoordinador(_req: Request, res: Response) {
               e.carnet, u.nombre AS estudiante_nombre, u.apellido AS estudiante_apellido,
               t.id_tutor, ut.nombre AS tutor_nombre, ut.apellido AS tutor_apellido,
               protocolo.estado AS estado_protocolo,
+              documento_final.estado AS estado_documento_final,
+              COALESCE(documento_final.estado = 'APROBADO', FALSE) AS documento_final_aprobado,
               CASE WHEN confirmacion.id_usuario_tutor = ut.id_usuario
                          AND confirmacion.id_protocolo = protocolo.id_protocolo
                          AND protocolo.estado = 'APROBADO'
@@ -114,12 +119,9 @@ export async function listarDefensasCoordinador(_req: Request, res: Response) {
                          AND confirmacion.confirmada = TRUE
                    THEN TRUE ELSE FALSE END AS confirmacion_vigente,
               d.id_defensa, d.fecha, d.hora, d.lugar, d.estado AS estado_defensa, d.observaciones,
+              COALESCE(jurado.miembros, '[]'::json) AS miembros_jurado,
               COALESCE(historial.eventos, '[]'::json) AS historial_defensas,
-              (protocolo.estado = 'APROBADO'
-               AND confirmacion.confirmada = TRUE
-               AND confirmacion.id_usuario_tutor = ut.id_usuario
-               AND confirmacion.id_protocolo = protocolo.id_protocolo
-               AND ut.rol = 'TUTOR' AND ut.activo = TRUE
+              (documento_final.estado = 'APROBADO'
                AND NOT EXISTS (
                  SELECT 1 FROM defensas activa
                   WHERE activa.id_monografia = m.id_monografia
@@ -136,6 +138,15 @@ export async function listarDefensasCoordinador(_req: Request, res: Response) {
             ORDER BY p.numero_version DESC LIMIT 1
          ) protocolo ON TRUE
          LEFT JOIN LATERAL (
+           SELECT a.estado
+             FROM avances a
+             JOIN etapas_monografia etapa ON etapa.id_etapa = a.id_etapa
+            WHERE a.id_monografia = m.id_monografia
+              AND LOWER(BTRIM(etapa.nombre)) = 'documento final'
+            ORDER BY a.fecha_entrega DESC, a.id_avance DESC
+            LIMIT 1
+         ) documento_final ON TRUE
+         LEFT JOIN LATERAL (
            SELECT c.confirmada, c.id_usuario_tutor, c.id_protocolo
              FROM confirmaciones_defensa c
             WHERE c.id_monografia = m.id_monografia AND c.vigente = TRUE
@@ -147,6 +158,15 @@ export async function listarDefensasCoordinador(_req: Request, res: Response) {
             WHERE d0.id_monografia = m.id_monografia
             ORDER BY d0.id_defensa DESC LIMIT 1
          ) d ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT json_agg(json_build_object(
+                    'id_miembro', mj.id_miembro,
+                    'nombre_completo', mj.nombre_completo,
+                    'fecha_asignacion', mj.fecha_asignacion
+                  ) ORDER BY mj.nombre_completo) AS miembros
+             FROM miembros_jurado_defensa mj
+            WHERE mj.id_defensa = d.id_defensa
+         ) jurado ON TRUE
          LEFT JOIN LATERAL (
            SELECT json_agg(json_build_object(
                     'id_historial', h.id_historial,
@@ -183,6 +203,9 @@ export async function obtenerDefensaMonografia(req: Request, res: Response) {
     const result = await pool.query(
       `SELECT d.id_defensa, d.id_monografia, d.fecha, d.hora, d.lugar,
               d.estado, d.observaciones,
+              COALESCE(jurado.miembros, '[]'::json) AS miembros_jurado,
+              documento_final.estado AS estado_documento_final,
+              COALESCE(documento_final.estado = 'APROBADO', FALSE) AS documento_final_aprobado,
               protocolo.id_protocolo AS id_protocolo_actual,
               protocolo.estado AS estado_protocolo,
               CASE WHEN c.id_usuario_tutor = t.id_usuario
@@ -201,10 +224,28 @@ export async function obtenerDefensaMonografia(req: Request, res: Response) {
             ORDER BY d0.id_defensa DESC LIMIT 1
          ) d ON TRUE
          LEFT JOIN LATERAL (
+           SELECT json_agg(json_build_object(
+                    'id_miembro', mj.id_miembro,
+                    'nombre_completo', mj.nombre_completo,
+                    'fecha_asignacion', mj.fecha_asignacion
+                  ) ORDER BY mj.nombre_completo) AS miembros
+             FROM miembros_jurado_defensa mj
+            WHERE mj.id_defensa = d.id_defensa
+         ) jurado ON TRUE
+         LEFT JOIN LATERAL (
            SELECT p.id_protocolo, p.estado FROM protocolos_monografia p
             WHERE p.id_monografia = m.id_monografia
             ORDER BY p.numero_version DESC LIMIT 1
          ) protocolo ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT a.estado
+             FROM avances a
+             JOIN etapas_monografia etapa ON etapa.id_etapa = a.id_etapa
+            WHERE a.id_monografia = m.id_monografia
+              AND LOWER(BTRIM(etapa.nombre)) = 'documento final'
+            ORDER BY a.fecha_entrega DESC, a.id_avance DESC
+            LIMIT 1
+         ) documento_final ON TRUE
          LEFT JOIN LATERAL (
            SELECT c0.confirmada, c0.id_usuario_tutor, c0.id_protocolo
              FROM confirmaciones_defensa c0
@@ -218,6 +259,7 @@ export async function obtenerDefensaMonografia(req: Request, res: Response) {
     return res.json({
       success: true,
       defensa: row?.id_defensa ? row : null,
+      documento_final_aprobado: row?.estado_documento_final === 'APROBADO',
       protocolo_aprobado: row?.estado_protocolo === 'APROBADO',
       tutor_confirmo: row?.tutor_confirmo === true,
     })
@@ -312,13 +354,9 @@ export async function crearDefensa(req: Request, res: Response) {
       await client.query('ROLLBACK'); inTransaction = false
       return res.status(404).json({ success: false, message: 'La monografía no existe.' })
     }
-    if (!readiness.id_tutor || readiness.estado_protocolo !== 'APROBADO' || readiness.rol_tutor !== 'TUTOR' || readiness.tutor_activo !== true) {
+    if (readiness.estado_documento_final !== 'APROBADO') {
       await client.query('ROLLBACK'); inTransaction = false
-      return res.status(409).json({ success: false, message: 'La monografía debe tener tutor asignado y protocolo aprobado.' })
-    }
-    if (!hasCurrentReadiness(readiness)) {
-      await client.query('ROLLBACK'); inTransaction = false
-      return res.status(409).json({ success: false, message: 'El tutor asignado debe confirmar que la monografía está lista para defensa.' })
+      return res.status(409).json({ success: false, message: 'El documento final debe estar aprobado por el tutor antes de programar la defensa.' })
     }
     const existingDefense = await client.query(
       `SELECT id_defensa, estado, fecha, hora, lugar, observaciones
@@ -389,9 +427,9 @@ export async function modificarDefensa(req: Request, res: Response) {
       return res.status(404).json({ success: false, message: 'La defensa no existe.' })
     }
     const readiness = await checkReadiness(client, Number(existing.rows[0].id_monografia))
-    if (!hasCurrentReadiness(readiness)) {
+    if (readiness?.estado_documento_final !== 'APROBADO') {
       await client.query('ROLLBACK'); inTransaction = false
-      return res.status(409).json({ success: false, message: 'No se puede reprogramar: se requiere protocolo aprobado y confirmación vigente del tutor asignado.' })
+      return res.status(409).json({ success: false, message: 'No se puede reprogramar: el documento final debe estar aprobado por el tutor.' })
     }
     const current = await client.query(
       `SELECT id_monografia, fecha, hora, lugar, observaciones, estado
@@ -509,4 +547,66 @@ export async function cancelarDefensa(req: Request, res: Response) {
     console.error('Error al cancelar defensa:', error instanceof Error ? error.name : 'UnknownError')
     return res.status(500).json({ success: false, message: 'No se pudo cancelar la defensa.' })
   } finally { client.release() }
+}
+
+export async function reemplazarMiembrosJurado(req: Request, res: Response) {
+  const idCoordinador = req.authUser?.rol === 'COORDINADOR' ? req.authUser.id_usuario : null
+  const idDefensa = parseMonografiaId(req.params.id_defensa)
+  const rawMembers: unknown = req.body?.miembros
+  if (!idCoordinador) return res.status(403).json({ success: false, message: 'Solo coordinación puede asignar el jurado.' })
+  if (!idDefensa) return res.status(400).json({ success: false, message: 'El identificador de defensa no es válido.' })
+  if (!Array.isArray(rawMembers) || rawMembers.length > 50 || rawMembers.some(member => typeof member !== 'string')) {
+    return res.status(400).json({ success: false, message: 'La lista de miembros del jurado no es válida.' })
+  }
+
+  const members = (rawMembers as string[]).map(member => member.trim()).filter(Boolean)
+  if (members.some(member => member.length > 200)) {
+    return res.status(400).json({ success: false, message: 'Cada nombre debe tener como máximo 200 caracteres.' })
+  }
+  const normalized = members.map(member => member.toLocaleLowerCase())
+  if (new Set(normalized).size !== normalized.length) {
+    return res.status(400).json({ success: false, message: 'No repitas nombres en la lista del jurado.' })
+  }
+
+  const client = await pool.connect()
+  let inTransaction = false
+  try {
+    await client.query('BEGIN')
+    inTransaction = true
+    const defense = await client.query(
+      `SELECT id_defensa, estado FROM defensas WHERE id_defensa = $1 FOR UPDATE`,
+      [idDefensa]
+    )
+    if (!defense.rowCount) {
+      await client.query('ROLLBACK'); inTransaction = false
+      return res.status(404).json({ success: false, message: 'La defensa no existe.' })
+    }
+    if (defense.rows[0].estado !== 'PROGRAMADA') {
+      await client.query('ROLLBACK'); inTransaction = false
+      return res.status(409).json({ success: false, message: 'Solo se puede modificar el jurado de una defensa programada.' })
+    }
+
+    await client.query('DELETE FROM miembros_jurado_defensa WHERE id_defensa = $1', [idDefensa])
+    for (const nombreCompleto of members) {
+      await client.query(
+        `INSERT INTO miembros_jurado_defensa (id_defensa, nombre_completo, id_usuario_coordinador)
+         VALUES ($1, $2, $3)`,
+        [idDefensa, nombreCompleto, idCoordinador]
+      )
+    }
+    const result = await client.query<MiembroJurado>(
+      `SELECT id_miembro, nombre_completo, fecha_asignacion
+         FROM miembros_jurado_defensa WHERE id_defensa = $1 ORDER BY nombre_completo`,
+      [idDefensa]
+    )
+    await client.query('COMMIT')
+    inTransaction = false
+    return res.json({ success: true, miembros: result.rows, message: 'Se guardó la composición del jurado.' })
+  } catch (error) {
+    if (inTransaction) await client.query('ROLLBACK')
+    console.error('Error al guardar jurado de defensa:', error instanceof Error ? error.name : 'UnknownError')
+    return res.status(500).json({ success: false, message: 'No se pudo guardar la composición del jurado.' })
+  } finally {
+    client.release()
+  }
 }

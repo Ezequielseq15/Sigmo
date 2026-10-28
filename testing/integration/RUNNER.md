@@ -25,14 +25,19 @@ cuentas y recursos sintéticos y ejecuta CP-02, CP-03, CP-04, CP-08, CP-10 y CP-
 Incluye duplicados de correo/carnet, login/sesión estudiante-tutor-coordinador,
 creación de propuestas, aprobación/rechazo y `revisado_por`, asignación de tutor,
 avance con PDF, persistencia, acceso de propietario y descarga autorizada.
+También comprueba que Propuesta no aparezca como etapa de avance y que el
+coordinador asigne integrantes sintéticos del jurado a una defensa programada;
+estudiante y tutor asignados pueden consultarlos y otros usuarios no.
 
 ## Preparación antes de los comandos
 
 1. Obtener y revisar el dump de solo esquema según `README.md`; no usar los scripts
    históricos `Database/Query-*.sql` completos.
-2. Crear una base/instancia PostgreSQL desechable, local y sin volumen compartido;
-   cargar primero el esquema aprobado y luego `isolation-marker.sql`. No ejecutar
-   estas operaciones en la base actual.
+2. Crear una base/instancia PostgreSQL desechable, local y sin volumen compartido.
+   Cargar el esquema aprobado y solo las migraciones revisadas que correspondan a
+   los módulos que se probarán (`defensas-module.sql` y `jurado-module.sql` para
+   defensa/jurado); cargar al final `isolation-marker.sql`. No ejecutar estas
+   operaciones en la base actual ni usar los `Query-*.sql` históricos completos.
 3. Crear la copia temporal del backend según el README. Debe estar bajo la carpeta
    temporal del sistema, con dependencias ya disponibles, `.env*` ausente y un
    directorio `uploads` vacío. No instalar paquetes para satisfacer este runner.

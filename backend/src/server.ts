@@ -102,6 +102,8 @@ app.get('/', authMiddleware, (_req, res) => {
 app.get('/api/health', (_req, res) => {
   res.json({
     success: true,
+    status: 'ok',
+    uptime: process.uptime(),
     message: 'Servidor SIGMO activo',
     timestamp: new Date().toISOString(),
   })
@@ -159,6 +161,10 @@ app.use('/api/notificaciones', authMiddleware, notificacionRoutes)
 
 app.use('/api/coordinador', authMiddleware, requireRoles('COORDINADOR'), coordinadorRoutes)
 
+app.use((_req, res) => {
+  res.status(404).json({ success: false, message: 'Ruta no encontrada.' })
+})
+
 // =====================================================
 // MANEJO DE ERRORES
 // =====================================================
@@ -196,7 +202,7 @@ app.use((
 // INICIAR SERVIDOR
 // =====================================================
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('==============================')
   console.log('SIGMO BACKEND')
   console.log(`Servidor: http://localhost:${PORT}`)

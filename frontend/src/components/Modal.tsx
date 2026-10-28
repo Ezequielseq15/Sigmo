@@ -11,10 +11,10 @@ interface ModalProps {
 export default function Modal({ open, title, onClose, children }: ModalProps) {
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+    <div className="sigmo-modal fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="sigmo-modal-backdrop absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
       <div
-        className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-100"
+        className="sigmo-modal-panel relative bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-100"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">

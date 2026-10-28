@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Calendar, Check, Loader2, Pencil, RefreshCw, X } from 'lucide-react'
+import { Calendar, Loader2, Pencil, RefreshCw } from 'lucide-react'
 import { API_URL, apiFetch } from '../config/api'
 
 type Role = 'ESTUDIANTE' | 'TUTOR' | 'COORDINADOR'
@@ -19,9 +19,8 @@ type DefenseRow = {
   estudiante_apellido?: string
   tutor_nombre?: string | null
   tutor_apellido?: string | null
-  estado_protocolo?: string | null
-  tutor_confirmo?: boolean
-  confirmacion_vigente?: boolean
+  estado_documento_final?: string | null
+  documento_final_aprobado?: boolean
   id_defensa?: number | null
   fecha?: string | null
   hora?: string | null
@@ -29,8 +28,8 @@ type DefenseRow = {
   estado_defensa?: string | null
   estado?: string | null
   observaciones?: string | null
+  miembros_jurado?: Array<{ id_miembro: number; nombre_completo: string }>
   defensa?: DefenseRow | null
-  protocolo_aprobado?: boolean
   puede_programar?: boolean
   historial_defensas?: DefenseHistory[]
 }
@@ -90,8 +89,10 @@ export default function DefensaPanel({ role, monografias = [] }: Props) {
             defensa: typeof data.defensa === 'object' && data.defensa !== null
               ? data.defensa as DefenseRow
               : null,
-            tutor_confirmo: data.tutor_confirmo === true,
-            protocolo_aprobado: data.protocolo_aprobado === true,
+            estado_documento_final: typeof data.estado_documento_final === 'string'
+              ? data.estado_documento_final
+              : null,
+            documento_final_aprobado: data.documento_final_aprobado === true,
           } as DefenseRow
         }))
         setRows(results)
@@ -150,23 +151,6 @@ export default function DefensaPanel({ role, monografias = [] }: Props) {
     } finally { setSaving(false) }
   }
 
-  const setTutorConfirmation = async (row: DefenseRow, confirmada: boolean) => {
-    setSaving(true); setError(''); setNotice('')
-    try {
-      const response = await apiFetch(`${API_URL}/api/defensas/monografia/${row.id_monografia}/confirmacion`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirmada }),
-      })
-      const data = await readApiJson(response)
-      if (!response.ok) throw new Error(apiMessage(data.message, 'No se pudo registrar la confirmación.'))
-      setNotice(confirmada ? 'Confirmaste que la monografía está lista para defensa.' : 'Retiraste la confirmación.')
-      await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo registrar la confirmación.')
-    } finally { setSaving(false) }
-  }
-
   const beginEdit = (row: DefenseRow) => {
     if (!row.id_defensa) return
     setEditingId(row.id_defensa)
@@ -204,7 +188,7 @@ export default function DefensaPanel({ role, monografias = [] }: Props) {
         <label className="text-sm">Lugar<input maxLength={200} required value={form.lugar} onChange={event => setForm({ ...form, lugar: event.target.value })} className="mt-1 w-full rounded-lg border p-2" /></label>
         <label className="text-sm">Observaciones<textarea maxLength={4000} value={form.observaciones} onChange={event => setForm({ ...form, observaciones: event.target.value })} className="mt-1 w-full rounded-lg border p-2" /></label>
         <button disabled={saving || (!editingId && !selectedId)} className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white disabled:opacity-50 md:col-span-2">{saving ? 'Guardando…' : editingId ? 'Guardar cambios' : 'Programar'}</button>
-        {eligible.length === 0 && <p className="text-sm text-amber-700 md:col-span-2">No hay monografías que cumplan ambas condiciones: protocolo aprobado y confirmación vigente del tutor asignado.</p>}
+        {eligible.length === 0 && <p className="text-sm text-amber-700 md:col-span-2">No hay monografías con el documento final aprobado y sin una defensa programada o realizada.</p>}
       </form>}
       <div className="space-y-3">
         {rows.length === 0 && <p className="rounded-xl border bg-white p-5 text-sm text-slate-500">No hay monografías disponibles.</p>}
@@ -215,15 +199,18 @@ export default function DefensaPanel({ role, monografias = [] }: Props) {
           return <article key={row.id_monografia} className="rounded-xl border bg-white p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h3 className="font-semibold text-slate-800">{title}</h3>
-                {role === 'COORDINADOR' && <p className="text-sm text-slate-500">Estudiante: {row.estudiante_nombre} {row.estudiante_apellido} · Tutor: {row.tutor_nombre || 'Sin asignar'} {row.tutor_apellido || ''}</p>}</div>
-              {role === 'TUTOR' && row.protocolo_aprobado && <button disabled={saving || (!!row.defensa && row.defensa.estado === 'PROGRAMADA')} onClick={() => void setTutorConfirmation(row, !row.tutor_confirmo)} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm disabled:opacity-50">
-                {row.tutor_confirmo ? <X size={16} /> : <Check size={16} />}{row.tutor_confirmo ? 'Retirar confirmación' : 'Confirmar lista para defensa'}
-              </button>}
+                {role === 'COORDINADOR' && <><p className="text-sm text-slate-500">Estudiante: {row.estudiante_nombre} {row.estudiante_apellido} · Tutor: {row.tutor_nombre || 'Sin asignar'} {row.tutor_apellido || ''}</p><p className="mt-1 text-xs text-slate-500">Documento final: {row.documento_final_aprobado ? 'aprobado' : 'pendiente de aprobación del tutor'}.</p></>}</div>
             </div>
             {defense?.id_defensa ? <div className="mt-3 rounded-lg bg-slate-50 p-4 text-sm">
               <p><strong>Fecha:</strong> {String(defense.fecha).slice(0, 10)} · <strong>Hora:</strong> {String(defense.hora).slice(0, 5)}</p>
               <p><strong>Lugar:</strong> {defense.lugar} · <strong>Estado:</strong> {defense.estado || defense.estado_defensa}</p>
               {defense.observaciones && <p className="mt-1"><strong>Observaciones:</strong> {defense.observaciones}</p>}
+              {(defense.miembros_jurado?.length || 0) > 0 && <div className="mt-3 border-t border-slate-200 pt-3">
+                <strong>Jurado:</strong>
+                <ul className="mt-1 list-inside list-disc text-slate-600">
+                  {defense.miembros_jurado!.map(member => <li key={member.id_miembro}>{member.nombre_completo}</li>)}
+                </ul>
+              </div>}
               {role === 'COORDINADOR' && active && <div className="mt-3 flex gap-2">
                 <button onClick={() => beginEdit(row)} className="inline-flex items-center gap-1 rounded border px-3 py-1.5"><Pencil size={15} />Modificar</button>
                 <button disabled={saving} onClick={() => void cancel(defense.id_defensa!)} className="rounded border border-red-200 px-3 py-1.5 text-red-700">Cancelar</button>
@@ -238,8 +225,7 @@ export default function DefensaPanel({ role, monografias = [] }: Props) {
                 </li>)}
               </ul>
             </div>}
-            {role === 'TUTOR' && !row.protocolo_aprobado && <p className="mt-3 text-sm text-slate-500">La confirmación estará disponible cuando el protocolo esté aprobado.</p>}
-            {role === 'TUTOR' && row.protocolo_aprobado && <p className="mt-2 text-xs text-slate-500">Confirmación del tutor: {row.tutor_confirmo ? 'registrada' : 'pendiente'}.</p>}
+            {role !== 'COORDINADOR' && <p className="mt-2 text-xs text-slate-500">Documento final: {row.documento_final_aprobado ? 'aprobado' : 'pendiente de aprobación del tutor'}.</p>}
           </article>
         })}
       </div>

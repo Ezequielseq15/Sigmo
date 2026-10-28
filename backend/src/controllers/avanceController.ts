@@ -66,6 +66,7 @@ export const getAvancesByMonografia = async (
       LEFT JOIN usuarios ur
         ON ur.id_usuario = a.revisado_por
       WHERE a.id_monografia = $1
+        AND LOWER(BTRIM(e.nombre)) <> 'defensa'
       ORDER BY a.fecha_entrega DESC, a.id_avance DESC
       `,
       [idMonografia]
@@ -91,6 +92,7 @@ export const getEtapasAvance = async (_req: Request, res: Response) => {
     const result = await pool.query(
       `SELECT id_etapa, nombre, orden
          FROM etapas_monografia
+        WHERE LOWER(BTRIM(nombre)) NOT IN ('propuesta', 'defensa')
         ORDER BY orden ASC, id_etapa ASC`
     )
     return res.json({ success: true, etapas: result.rows })
@@ -179,17 +181,14 @@ export const createAvance = async (
       monografia.estado_ultimo_protocolo || ''
     ).trim().toUpperCase()
 
-    if (
-      estadoPropuesta !== 'APROBADO' ||
-      estadoProtocolo !== 'APROBADO'
-    ) {
+    if (estadoProtocolo !== 'APROBADO') {
       await client.query('ROLLBACK')
 
       return res.status(403).json({
         success: false,
         code: 'PROTOCOLO_NO_APROBADO',
         message:
-          'No puedes registrar avances hasta que la propuesta y la última versión del protocolo estén aprobadas.',
+          'No puedes registrar avances hasta que la última versión del protocolo esté aprobada.',
         estado_propuesta: estadoPropuesta || 'SIN_ESTADO',
         estado_protocolo: estadoProtocolo || 'SIN_PROTOCOLO',
       })
@@ -236,6 +235,7 @@ export const createAvance = async (
       SELECT id_etapa
       FROM etapas_monografia
       WHERE id_etapa = $1
+        AND LOWER(BTRIM(nombre)) NOT IN ('propuesta', 'defensa')
       `,
       [idEtapa]
     )
@@ -245,23 +245,15 @@ export const createAvance = async (
 
       return res.status(400).json({
         success: false,
-        message: 'La etapa seleccionada no existe.',
+        message: 'La etapa seleccionada no existe o no corresponde a un avance.',
       })
     }
-
-    const numeroResult = await client.query(
-      `SELECT COALESCE(MAX(numero_avance), 0) + 1 AS siguiente_numero
-         FROM avances WHERE id_monografia = $1`,
-      [idMonografia]
-    )
-    const numeroAvance = Number(numeroResult.rows[0]?.siguiente_numero)
 
     const avanceResult = await client.query(
       `
       INSERT INTO avances (
         id_monografia,
         id_etapa,
-        numero_avance,
         descripcion,
         estado,
         fecha_entrega,
@@ -271,17 +263,15 @@ export const createAvance = async (
         $1,
         $2,
         $3,
-        $4,
         'PENDIENTE',
         CURRENT_TIMESTAMP,
-        $5
+        $4
       )
       RETURNING *
       `,
       [
         idMonografia,
         idEtapa,
-        numeroAvance,
         descripcionNormalizada,
         idUsuarioEnvio,
       ]
@@ -365,7 +355,6 @@ export const createAvanceWithDocument = async (
       `SELECT
          m.id_monografia,
          m.id_estudiante,
-         m.estado_propuesta,
          (SELECT p.estado
           FROM protocolos_monografia p
           WHERE p.id_monografia = m.id_monografia
@@ -382,13 +371,12 @@ export const createAvanceWithDocument = async (
     }
 
     const monografia = monografiaResult.rows[0]
-    const estadoPropuesta = String(monografia.estado_propuesta || '').trim().toUpperCase()
     const estadoProtocolo = String(monografia.estado_ultimo_protocolo || '').trim().toUpperCase()
 
-    if (estadoPropuesta !== 'APROBADO' || estadoProtocolo !== 'APROBADO') {
+    if (estadoProtocolo !== 'APROBADO') {
       return reject(
         403,
-        'No puedes registrar avances hasta que la propuesta y la última versión del protocolo estén aprobadas.',
+        'No puedes registrar avances hasta que la última versión del protocolo esté aprobada.',
         'PROTOCOLO_NO_APROBADO'
       )
     }
@@ -418,26 +406,20 @@ export const createAvanceWithDocument = async (
     }
 
     const etapaResult = await client.query(
-      'SELECT 1 FROM etapas_monografia WHERE id_etapa = $1',
+      `SELECT 1 FROM etapas_monografia
+        WHERE id_etapa = $1 AND LOWER(BTRIM(nombre)) NOT IN ('propuesta', 'defensa')`,
       [idEtapa]
     )
     if (etapaResult.rowCount === 0) {
-      return reject(400, 'La etapa seleccionada no existe.')
+      return reject(400, 'La etapa seleccionada no existe o no corresponde a un avance.')
     }
-
-    const numeroResult = await client.query(
-      `SELECT COALESCE(MAX(numero_avance), 0) + 1 AS siguiente_numero
-         FROM avances WHERE id_monografia = $1`,
-      [idMonografia]
-    )
-    const numeroAvance = Number(numeroResult.rows[0]?.siguiente_numero)
 
     const avanceResult = await client.query(
       `INSERT INTO avances (
-         id_monografia, id_etapa, numero_avance, descripcion, estado, fecha_entrega, enviado_por
-       ) VALUES ($1, $2, $3, $4, 'PENDIENTE', CURRENT_TIMESTAMP, $5)
+         id_monografia, id_etapa, descripcion, estado, fecha_entrega, enviado_por
+       ) VALUES ($1, $2, $3, 'PENDIENTE', CURRENT_TIMESTAMP, $4)
        RETURNING *`,
-      [idMonografia, idEtapa, numeroAvance, descripcion, idUsuarioEnvio]
+      [idMonografia, idEtapa, descripcion, idUsuarioEnvio]
     )
 
     const rutaArchivo = `/uploads/avances/${archivo.filename}`

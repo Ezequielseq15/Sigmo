@@ -145,7 +145,7 @@ export const register = async (req: Request, res: Response) => {
     !nombre || nombre.length > 100 || !apellido || apellido.length > 100 ||
     !correo || correo.length > 150 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)
   ) {
-    return res.status(400).json({ success: false, message: 'Revisa el nombre, apellido y correo ingresados.' })
+    return res.status(400).json({ success: false, message: 'Nombre, apellido, correo y contraseña son obligatorios o tienen un formato inválido.' })
   }
   if (password.length < 6 || Buffer.byteLength(password, 'utf8') > 72) {
     return res.status(400).json({ success: false, message: 'La contraseña debe tener al menos 6 caracteres y no exceder el límite admitido.' })
@@ -154,7 +154,7 @@ export const register = async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, message: 'Las contraseñas no coinciden.' })
   }
   if (rol === 'ESTUDIANTE' && (!carnet || carnet.length > 30 || !Number.isSafeInteger(idCarrera) || idCarrera <= 0)) {
-    return res.status(400).json({ success: false, message: 'Para estudiantes, carnet y carrera son obligatorios y deben ser válidos.' })
+    return res.status(400).json({ success: false, message: 'Para estudiantes, el carnet y una carrera válida son obligatorios.' })
   }
   if (rol === 'TUTOR' && (departamento.length > 150 || especialidad.length > 200)) {
     return res.status(400).json({ success: false, message: 'El departamento o la especialidad exceden la longitud permitida.' })

@@ -50,8 +50,40 @@ del entorno donde se ejecute SIGMO.
 
 ```powershell
 cd frontend
+$env:VITE_API_URL = "https://URL-PUBLICA-DEL-BACKEND"
 npm run build
 ```
+
+El build de producción falla intencionalmente si `VITE_API_URL` falta, no es una
+URL válida, no usa HTTPS o contiene credenciales. En Vercel, configura esta
+variable en **Project Settings → Environment Variables** para Production y
+Preview, usando la URL pública HTTPS del backend. No pongas claves privadas en
+variables `VITE_*`: Vite las incluye en el JavaScript público del navegador.
+
+## Despliegue frontend en Vercel
+
+Este repositorio contiene un frontend Vite dentro de `frontend/`; crea el
+proyecto Vercel con **Root Directory** `frontend`, framework Vite, build command
+`npm run build` y output directory `dist`. No se necesita un `vercel.json` para
+la estructura actual, que no usa rutas de página del lado del cliente.
+
+Vercel publica el frontend estático. El backend Express debe ejecutarse como un
+servicio web separado (por ejemplo, Render). En el servicio backend configura
+`NODE_ENV=production`, `JWT_SECRET` (mínimo 32 bytes), `CORS_ORIGINS` con el
+origen HTTPS exacto de Vercel y las variables PostgreSQL `DB_HOST`, `DB_PORT`,
+`DB_NAME`, `DB_USER` y `DB_PASSWORD`. Configura secretos desde el panel del
+proveedor; no los escribas en Vercel como variables `VITE_*` ni en Git.
+
+Antes de poner en línea el módulo de defensas/jurado, aplica y verifica en la
+base de destino la migración revisada `Database/jurado-module.sql`. El esquema
+inspeccionado aún no incluye `miembros_jurado_defensa`, tabla que usan los
+endpoints de listado y asignación del jurado. La migración no se ejecuta durante
+el build ni el despliegue.
+
+Los PDFs y otros documentos se guardan actualmente en `backend/uploads`. El
+disco efímero del servicio puede perder archivos al reiniciar o desplegar; antes
+de recibir documentos reales, configura un disco persistente en esa ruta o
+migra los archivos a almacenamiento de objetos.
 
 ## Variables para despliegue
 

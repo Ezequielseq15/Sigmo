@@ -24,7 +24,7 @@ export default function StatusBadge({ status }: { status: Status }) {
   const cls = styles[status] ?? 'bg-slate-50 text-slate-600 ring-1 ring-slate-200'
   const dot = dots[status] ?? 'bg-slate-400'
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium font-mono ${cls}`}>
+    <span className={`sigmo-status-badge inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold font-sans tracking-wide ${cls}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
       {status}
     </span>

@@ -28,6 +28,7 @@ import {
 
 import StatusBadge from '../components/StatusBadge'
 import Modal from '../components/Modal'
+import DefensaPanel from '../components/DefensaPanel'
 import { API_URL, apiFetch, downloadAuthenticatedFile } from '../config/api'
 
 interface Props {
@@ -1297,7 +1298,7 @@ const response = await apiFetch(
   */
 
   return (
-    <div className="h-full flex bg-slate-50">
+    <div className="sigmo-dashboard sigmo-dashboard--tutor h-full flex bg-slate-50">
 
       {/* SIDEBAR */}
 
@@ -1605,7 +1606,13 @@ const response = await apiFetch(
 
           {section ===
             'calendario' && (
-            <CalendarioTutor />
+            <DefensaPanel
+              role="TUTOR"
+              monografias={monografias.map(monografia => ({
+                id_monografia: monografia.id_monografia,
+                titulo: monografia.titulo,
+              }))}
+            />
           )}
 
           {section ===
@@ -3093,49 +3100,6 @@ function ProfileRow({
       <span className="text-sm text-slate-700 font-medium">
         {value}
       </span>
-
-    </div>
-  )
-}
-
-/*
-|--------------------------------------------------------------------------
-| CALENDARIO
-|--------------------------------------------------------------------------
-*/
-
-function CalendarioTutor() {
-  return (
-    <div className="space-y-5">
-
-      <div>
-
-        <h1 className="text-2xl font-bold text-slate-800">
-          Calendario
-        </h1>
-
-        <p className="text-sm text-slate-500 mt-1">
-          Calendario de defensas y actividades.
-        </p>
-
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-100 p-10 text-center">
-
-        <Calendar
-          size={48}
-          className="mx-auto text-emerald-500"
-        />
-
-        <h3 className="mt-4 font-semibold text-slate-700">
-          Calendario de defensas
-        </h3>
-
-        <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto">
-          Esta sección queda preparada para integrar las fechas de defensa cuando el módulo de programación esté conectado.
-        </p>
-
-      </div>
 
     </div>
   )

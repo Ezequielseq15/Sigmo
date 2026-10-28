@@ -344,13 +344,33 @@ export default function Login({ onSuccess }: LoginProps) {
   // =========================================================
 
   return (
-    <div className="min-h-full flex">
+    <div className="login-page min-h-screen flex items-stretch justify-center">
 
       {/* =====================================================
           PANEL IZQUIERDO
       ===================================================== */}
 
-      <div className="hidden lg:flex lg:w-1/2 bg-blue-600 text-white relative overflow-hidden">
+      <div className="login-hero relative flex w-full min-h-[250px] sm:min-h-[280px] lg:min-h-[820px] lg:w-[46%] text-white overflow-hidden">
+
+        <svg
+          aria-hidden="true"
+          className="login-network absolute inset-0 h-full w-full"
+          viewBox="0 0 720 900"
+          preserveAspectRatio="xMidYMid slice"
+        >
+          <g fill="none" stroke="currentColor" strokeWidth="1">
+            <path d="M0 150 120 82 222 155 340 92 430 180 548 100 720 182M0 340 116 260 222 155 294 342 430 180 512 330 720 182M0 535 142 438 294 342 356 540 512 330 610 500 720 420M0 740 142 620 260 790 356 540 474 740 610 500 720 660" />
+          </g>
+          <g fill="currentColor">
+            <circle cx="120" cy="82" r="4" /><circle cx="222" cy="155" r="3" />
+            <circle cx="340" cy="92" r="4" /><circle cx="430" cy="180" r="3" />
+            <circle cx="548" cy="100" r="4" /><circle cx="116" cy="260" r="4" />
+            <circle cx="294" cy="342" r="3" /><circle cx="512" cy="330" r="4" />
+            <circle cx="142" cy="438" r="3" /><circle cx="356" cy="540" r="4" />
+            <circle cx="610" cy="500" r="3" /><circle cx="142" cy="620" r="4" />
+            <circle cx="260" cy="790" r="3" /><circle cx="474" cy="740" r="4" />
+          </g>
+        </svg>
 
         {/* Formas decorativas */}
         <div className="absolute inset-0 overflow-hidden">
@@ -359,7 +379,7 @@ export default function Login({ onSuccess }: LoginProps) {
           <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-blue-700 rounded-full opacity-40" />
         </div>
 
-        <div className="relative z-10 flex flex-col justify-center px-16 xl:px-24 w-full">
+        <div className="login-hero-content relative z-10 flex flex-col justify-center px-6 sm:px-10 lg:px-12 xl:px-16 w-full">
 
           {/* LOGO */}
 
@@ -390,7 +410,7 @@ export default function Login({ onSuccess }: LoginProps) {
 
           {/* TÍTULO */}
 
-          <h1 className="text-4xl xl:text-5xl font-bold leading-tight mb-6">
+          <h1 className="text-3xl sm:text-4xl xl:text-5xl font-bold leading-tight mb-6">
 
             Gestión de tu
 
@@ -431,7 +451,7 @@ export default function Login({ onSuccess }: LoginProps) {
           PANEL DERECHO
       ===================================================== */}
 
-      <div className="flex-1 flex items-center justify-center p-6 bg-slate-50">
+      <div className="login-content flex-1 flex items-center justify-center p-5 sm:p-8 lg:p-10">
 
         <div className="w-full max-w-md">
 
@@ -444,7 +464,7 @@ export default function Login({ onSuccess }: LoginProps) {
             <>
               {/* ENCABEZADO REGISTRO */}
 
-              <div className="text-center mb-8">
+              <div className="login-heading text-center mb-8">
 
                 <div className="lg:hidden flex justify-center mb-5">
 
@@ -468,7 +488,7 @@ export default function Login({ onSuccess }: LoginProps) {
 
               {/* TARJETA REGISTRO */}
 
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-7">
+              <div className="login-form-card bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-7">
 
                 <form
                   onSubmit={handleRegister}
@@ -838,7 +858,7 @@ export default function Login({ onSuccess }: LoginProps) {
 
               {/* ENCABEZADO */}
 
-              <div className="text-center mb-8">
+              <div className="login-heading text-center mb-8">
 
                 {/* Logo para móvil */}
 
@@ -864,7 +884,7 @@ export default function Login({ onSuccess }: LoginProps) {
 
               {/* TARJETA */}
 
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-7">
+              <div className="login-form-card bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-7">
 
                 <form
                   onSubmit={handleSubmit}

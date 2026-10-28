@@ -97,3 +97,275 @@ hr { border-color: var(--sigmo-border); }
   body { font-size: 14px; }
   table { display: block; overflow-x: auto; white-space: nowrap; }
 }
+
+/* ============================================================
+   SIGMO institutional visual refresh
+   Presentation only: application state and API behavior unchanged.
+   ============================================================ */
+:root {
+  --sigmo-ink: #102344;
+  --sigmo-muted: #687b99;
+  --sigmo-primary: #2459e0;
+  --sigmo-primary-dark: #142e59;
+  --sigmo-border: #dce5f1;
+  --sigmo-bg: #f2f6fc;
+  --sigmo-shadow: 0 18px 46px rgba(13, 35, 70, .08);
+}
+
+body {
+  background: #eef3fa;
+}
+
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
+textarea:focus-visible { outline-color: #3f74ee; }
+
+/* Login and registration */
+.login-page {
+  width: 100%;
+  padding: clamp(0px, 3vw, 32px);
+}
+.login-page > .login-hero,
+.login-page > .login-content {
+  min-height: min(860px, calc(100dvh - 64px));
+}
+.login-page > .login-hero {
+  flex: 0 0 46%;
+  border: 1px solid rgba(255,255,255,.72);
+  border-right: 0;
+  border-radius: 26px 0 0 26px;
+  background:
+    radial-gradient(circle at 86% 42%, rgba(63, 115, 206, .23), transparent 17rem),
+    linear-gradient(145deg, #112c55 0%, #081a34 68%, #06152b 100%);
+  box-shadow: 0 22px 70px rgba(10, 30, 61, .2);
+}
+.login-hero::before, .login-hero::after {
+  position: absolute;
+  z-index: 0;
+  content: '';
+  pointer-events: none;
+}
+.login-hero::before {
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(170,205,255,.26) 1.2px, transparent 1.8px);
+  background-size: 34px 34px;
+  opacity: .18;
+  mask-image: linear-gradient(120deg, #000, transparent 70%);
+}
+.login-hero::after {
+  width: 390px;
+  height: 390px;
+  right: -145px;
+  top: 20%;
+  border: 1px solid rgba(170,205,255,.14);
+  border-radius: 50%;
+  box-shadow: 0 0 0 48px rgba(170,205,255,.025), 0 0 0 96px rgba(170,205,255,.02);
+}
+.login-network {
+  z-index: 0;
+  color: #92b8f4;
+  opacity: .24;
+}
+.login-hero > div.absolute {
+  z-index: 0;
+  opacity: .11;
+}
+.login-hero-content { min-height: inherit; }
+.login-hero-content > div:first-child > div:first-child {
+  border-radius: 14px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.14);
+}
+.login-hero-content h1 { letter-spacing: -.035em; }
+.login-hero-content p { color: #c5d7f4; }
+.login-page > .login-content {
+  flex: 1 1 auto;
+  border: 1px solid rgba(255,255,255,.8);
+  border-left: 1px solid #e5ebf4;
+  border-radius: 0 26px 26px 0;
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 22px 70px rgba(10, 30, 61, .15);
+}
+.login-content > div { max-width: 440px; }
+.login-heading h2 { color: #102344; letter-spacing: -.025em; }
+.login-heading p { color: #7183a0; }
+.login-form-card {
+  border-color: #e1e9f4 !important;
+  border-radius: 18px !important;
+  box-shadow: 0 12px 34px rgba(22, 50, 91, .075) !important;
+}
+.login-form-card label { color: #172e52; font-weight: 600; }
+.login-form-card input:not([type="checkbox"]),
+.login-form-card select {
+  min-height: 48px;
+  border-color: #dce5f1;
+  background: #f8fafd;
+  border-radius: 11px;
+}
+.login-form-card input:focus, .login-form-card select:focus {
+  background: #fff;
+  border-color: #386de4;
+  box-shadow: 0 0 0 4px rgba(56,109,228,.12);
+}
+.login-form-card button[type="submit"] {
+  min-height: 52px;
+  border-radius: 12px;
+  background: linear-gradient(100deg, #17345f, #214b86);
+  box-shadow: 0 9px 18px rgba(20,53,99,.16);
+}
+.login-form-card button[type="submit"]:hover:not(:disabled) {
+  background: linear-gradient(100deg, #10294e, #1d4279);
+  box-shadow: 0 12px 22px rgba(20,53,99,.23);
+}
+.login-form-card button:not([type="submit"]):focus-visible { outline-offset: 2px; }
+
+/* Shared workspace shell for all three roles */
+.sigmo-dashboard {
+  color: #142846;
+  background: #eef3fa;
+}
+.sigmo-dashboard > aside {
+  width: 16rem !important;
+  min-width: 16rem !important;
+  max-width: 16rem !important;
+  flex: 0 0 16rem;
+  color: #eaf1ff;
+  border-color: rgba(255,255,255,.09) !important;
+  background: linear-gradient(180deg, #102a50 0%, #0b1e3b 100%) !important;
+  box-shadow: 12px 0 34px rgba(10,29,57,.11);
+}
+.sigmo-dashboard,
+.sigmo-dashboard > div,
+.sigmo-dashboard main,
+.sigmo-dashboard main > * { min-width: 0; }
+.sigmo-dashboard--student > div { width: 100%; max-width: 100%; }
+.sigmo-dashboard--tutor > div,
+.sigmo-dashboard--coordinator > div { max-width: calc(100% - 16rem); }
+.sigmo-dashboard--tutor,
+.sigmo-dashboard--coordinator {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+.sigmo-dashboard--tutor > aside,
+.sigmo-dashboard--coordinator > aside { height: 100%; }
+.sigmo-dashboard--tutor > div,
+.sigmo-dashboard--coordinator > div {
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.sigmo-dashboard--tutor main,
+.sigmo-dashboard--coordinator main {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.sigmo-dashboard > aside .border-b,
+.sigmo-dashboard > aside .border-t { border-color: rgba(224,237,255,.12) !important; }
+.sigmo-dashboard > aside [class*="bg-emerald-50"],
+.sigmo-dashboard > aside [class*="bg-violet-50"] { background: rgba(255,255,255,.08) !important; }
+.sigmo-dashboard > aside [class*="text-slate-800"] { color: #f4f7ff !important; }
+.sigmo-dashboard > aside [class*="text-slate-500"] { color: #aabbd6 !important; }
+.sigmo-dashboard > aside [class*="text-emerald-600"],
+.sigmo-dashboard > aside [class*="text-violet-600"],
+.sigmo-dashboard--student > aside [class*="text-blue-200"] { color: #a9c8ff !important; }
+.sigmo-dashboard > aside [class*="bg-emerald-600"],
+.sigmo-dashboard > aside [class*="bg-violet-600"] {
+  color: #fff !important;
+  background: linear-gradient(100deg, #245de0, #3475f2) !important;
+  box-shadow: 0 8px 20px rgba(21,76,194,.28);
+}
+.sigmo-dashboard > aside nav button:not([class*="bg-white"]):not([class*="bg-emerald-600"]):not([class*="bg-violet-600"]) {
+  color: #c1d0e8 !important;
+}
+.sigmo-dashboard > aside nav button:hover { color: #fff !important; background: rgba(255,255,255,.09) !important; }
+.sigmo-dashboard > aside > div:first-child > div:first-child > div:first-child > div:first-child {
+  background: linear-gradient(145deg, #3677ef, #1b4eb7) !important;
+  box-shadow: 0 8px 18px rgba(0,0,0,.18);
+}
+.sigmo-dashboard > div > header,
+.sigmo-dashboard > header {
+  min-height: 68px;
+  border-color: #e1e9f3 !important;
+  background: rgba(255,255,255,.92) !important;
+  box-shadow: 0 5px 20px rgba(20,43,78,.045) !important;
+  backdrop-filter: blur(14px);
+}
+.sigmo-dashboard main {
+  background: transparent;
+}
+.sigmo-dashboard main [class*="bg-white"][class*="border"],
+.sigmo-dashboard main [class*="bg-white"][class*="shadow"] {
+  border-color: #e1e9f3 !important;
+  box-shadow: 0 9px 28px rgba(17,43,80,.055) !important;
+}
+.sigmo-dashboard main [class*="rounded-xl"],
+.sigmo-dashboard main [class*="rounded-2xl"] { border-radius: 15px; }
+.sigmo-dashboard main table { overflow: hidden; border: 1px solid #e5ebf3; border-radius: 13px; background: white; }
+.sigmo-dashboard main thead th { background: #f3f7fd; color: #536985; }
+.sigmo-dashboard main tbody tr:hover { background: #f6f9fe; }
+.sigmo-dashboard main button[class*="bg-blue-600"],
+.sigmo-dashboard main button[class*="bg-emerald-600"],
+.sigmo-dashboard main button[class*="bg-violet-600"] {
+  background: linear-gradient(100deg, #1d4fbd, #3474ee) !important;
+  box-shadow: 0 6px 15px rgba(34,86,191,.15);
+}
+.sigmo-dashboard main button[class*="bg-blue-600"]:hover,
+.sigmo-dashboard main button[class*="bg-emerald-600"]:hover,
+.sigmo-dashboard main button[class*="bg-violet-600"]:hover { filter: brightness(.95); }
+.sigmo-status-badge { letter-spacing: .015em; }
+.sigmo-modal-backdrop { background: rgba(7, 22, 45, .58) !important; }
+.sigmo-modal-panel {
+  overflow: hidden;
+  border-color: #dfe7f2 !important;
+  border-radius: 18px !important;
+  box-shadow: 0 28px 80px rgba(4, 18, 40, .28) !important;
+}
+.sigmo-modal-panel > div:first-child { background: #fbfcfe; }
+.sigmo-modal-panel { max-height: 90dvh; overflow-y: auto; }
+.sigmo-dashboard img, .login-page img { max-width: 100%; }
+
+@media (max-width: 1023px) {
+  .login-page { display: flex; flex-direction: column; align-items: stretch; padding: 0; }
+  .login-page > .login-hero,
+  .login-page > .login-content { min-height: initial; border-radius: 0; }
+  .login-page > .login-hero { flex: none; border: 0; padding: 22px 0; }
+  .login-hero-content { min-height: 0; }
+  .login-hero-content > div:first-child { margin-bottom: 18px; }
+  .login-hero-content h1 { margin-bottom: 12px; }
+  .login-hero-content p { font-size: 1rem; line-height: 1.55; }
+  .login-hero-content > div:last-child { margin-top: 16px; }
+  .login-page > .login-content { flex: 1; border: 0; box-shadow: none; padding-top: 28px; padding-bottom: 32px; }
+  .sigmo-dashboard > aside { width: 16rem !important; min-width: 16rem !important; max-width: 16rem !important; }
+  .sigmo-dashboard > div { max-width: 100%; width: 100%; }
+  .sigmo-dashboard--tutor,
+  .sigmo-dashboard--coordinator { height: auto; min-height: 100dvh; overflow: visible; }
+  .sigmo-dashboard--tutor > aside,
+  .sigmo-dashboard--coordinator > aside { height: 100dvh; }
+  .sigmo-dashboard--tutor > div,
+  .sigmo-dashboard--coordinator > div { height: auto; min-height: 100dvh; flex: 1 1 auto; }
+  .sigmo-dashboard--tutor main,
+  .sigmo-dashboard--coordinator main { overflow: visible; }
+}
+
+@media (max-width: 640px) {
+  .login-hero-content h1 { font-size: 1.75rem; line-height: 1.2; }
+  .login-hero-content > div:first-child > div:last-child > div:last-child { font-size: .7rem; }
+  .login-content { align-items: flex-start; }
+  .login-content > div { max-width: 100%; }
+  .sigmo-dashboard main { padding: 1rem !important; }
+  .sigmo-dashboard > div > header { padding-left: 1rem !important; padding-right: 1rem !important; }
+  .sigmo-dashboard main input.w-64,
+  .sigmo-dashboard main select.w-64 { width: min(16rem, 100%); }
+  .sigmo-dashboard main section > header { flex-wrap: wrap; }
+  .sigmo-dashboard main section > header > button { margin-left: auto; }
+  .sigmo-dashboard main [class*="grid"] > * { min-width: 0; }
+  .sigmo-dashboard main :is(input, select, textarea, button) { max-width: 100%; }
+}
+
+@media (max-width: 380px) {
+  .sigmo-dashboard main { padding: .75rem !important; }
+  .sigmo-dashboard > div > header { gap: .5rem; }
+  .sigmo-dashboard > aside { width: 16rem !important; }
+  .login-form-card { padding: 1rem !important; }
+}
